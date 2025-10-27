@@ -3,9 +3,11 @@ const router = express.Router();
 
 // Import route modules
 const authRoutes = require("./authRoutes");
+const workspaceRoutes = require("./workspaceRoutes");
 
 // Mount routes
 router.use("/auth", authRoutes);
+router.use("/workspaces", workspaceRoutes);
 
 // Health check for API
 router.get("/", (req, res) => {
@@ -13,6 +15,11 @@ router.get("/", (req, res) => {
     success: true,
     message: "Complifi API v1",
     timestamp: new Date().toISOString(),
+    version: "1.0.0",
+    endpoints: {
+      auth: "/api/v1/auth",
+      workspaces: "/api/v1/workspaces",
+    },
   });
 });
 

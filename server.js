@@ -63,10 +63,19 @@ const startServer = async () => {
     await db.sequelize.authenticate();
     console.log("✅ Database connected successfully");
 
-    if (envConfig.nodeEnv === "development") {
-      await db.sequelize.sync({ alter: false });
-      console.log("✅ Models synced with database");
-    }
+    // ========================================
+    // IMPORTANT: sequelize.sync() DISABLED
+    // Using migrations instead for production
+    // ========================================
+
+    // OLD CODE (will use in production):
+    // if (envConfig.nodeEnv === "development") {
+    //   await db.sequelize.sync({ alter: false });
+    //   console.log("✅ Models synced with database");
+    // }
+
+    console.log("Using migrations for database schema management");
+    // console.log("Run 'npm run db:migrate' to apply migrations");
 
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
