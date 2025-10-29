@@ -13,6 +13,8 @@ const {
   inviteMemberSchema,
   updateMemberRoleSchema,
 } = require("../validations/workspaceValidation");
+const folderController = require("../controllers/folderController");
+const { createFolderSchema } = require("../validations/foldervalidation");
 
 /**
  * All workspace routes require authentication
@@ -104,5 +106,31 @@ router.patch(
 // Switch workspace (for UI)
 // GET /api/v1/workspaces/:id/switch
 router.get("/:id/switch", protect, workspaceController.switchWorkspace);
+
+// Nested folder routes
+// POST /api/v1/workspaces/:workspaceId/folders
+router.post(
+  "/:workspaceId/folders",
+  protect,
+  checkWorkspaceAccess,
+  validate(createFolderSchema),
+  folderController.createFolder
+);
+
+// GET /api/v1/workspaces/:workspaceId/folders
+router.get(
+  "/:workspaceId/folders",
+  protect,
+  checkWorkspaceAccess,
+  folderController.getFolders
+);
+
+// GET /api/v1/workspaces/:workspaceId/job-board
+router.get(
+  "/:workspaceId/job-board",
+  protect,
+  checkWorkspaceAccess,
+  folderController.getJobBoard
+);
 
 module.exports = router;

@@ -4,10 +4,12 @@ const router = express.Router();
 // Import route modules
 const authRoutes = require("./authRoutes");
 const workspaceRoutes = require("./workspaceRoutes");
+const folderRoutes = require("./folderRoutes");
 
 // Mount routes
 router.use("/auth", authRoutes);
 router.use("/workspaces", workspaceRoutes);
+router.use("/folders", folderRoutes);
 
 // Health check for API
 router.get("/", (req, res) => {
@@ -19,6 +21,7 @@ router.get("/", (req, res) => {
     endpoints: {
       auth: "/api/v1/auth",
       workspaces: "/api/v1/workspaces",
+      folders: "/api/v1/folders",
     },
   });
 });

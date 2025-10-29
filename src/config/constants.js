@@ -35,7 +35,7 @@ module.exports = {
     HIGH: "HIGH",
   },
 
-  // Transaction Status
+  // Transaction Status (for Phase 4)
   TRANSACTION_STATUS: {
     MATCHED: "MATCHED",
     EXCEPTION: "EXCEPTION",
