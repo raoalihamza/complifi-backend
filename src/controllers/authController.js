@@ -6,7 +6,6 @@ class AuthController {
   /**
    * Register new user
    * POST /api/v1/auth/register
-   * Note: Does not return token - requires email verification
    */
   async register(req, res) {
     try {
@@ -21,10 +20,55 @@ class AuthController {
 
       return successResponse(
         res,
-        "User registered successfully. Please verify your email.",
-        result,
+        result.message,
+        {
+          token: result.token,
+          user: result.user,
+        },
         HTTP_STATUS.CREATED
       );
+    } catch (error) {
+      return errorResponse(
+        res,
+        error.message,
+        error,
+        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Verify email with OTP
+   * POST /api/v1/auth/verify-email
+   */
+  async verifyEmail(req, res) {
+    try {
+      const { email, otp } = req.body;
+
+      const result = await authService.verifyEmail(email, otp);
+
+      return successResponse(res, result.message, result.user, HTTP_STATUS.OK);
+    } catch (error) {
+      return errorResponse(
+        res,
+        error.message,
+        error,
+        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Resend OTP verification email
+   * POST /api/v1/auth/resend-otp
+   */
+  async resendOTP(req, res) {
+    try {
+      const { email } = req.body;
+
+      const result = await authService.resendOTP(email);
+
+      return successResponse(res, result.message, null, HTTP_STATUS.OK);
     } catch (error) {
       return errorResponse(
         res,
@@ -45,7 +89,51 @@ class AuthController {
 
       const result = await authService.login(email, password);
 
-      return successResponse(res, "Login successful", result, HTTP_STATUS.OK);
+      return successResponse(
+        res,
+        result.message,
+        {
+          token: result.token,
+          user: result.user,
+        },
+        HTTP_STATUS.OK
+      );
+    } catch (error) {
+      // Special handling for email verification requirement
+      if (error.needsVerification) {
+        return errorResponse(
+          res,
+          error.message,
+          { needsVerification: true },
+          HTTP_STATUS.FORBIDDEN
+        );
+      }
+
+      return errorResponse(
+        res,
+        error.message,
+        error,
+        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Submit company information (Onboarding Step 1)
+   * POST /api/v1/auth/company-info
+   */
+  async submitCompanyInfo(req, res) {
+    try {
+      const { companyName, companySize, companyLocation } = req.body;
+      const userId = req.user.id;
+
+      const result = await authService.submitCompanyInfo(userId, {
+        companyName,
+        companySize,
+        companyLocation,
+      });
+
+      return successResponse(res, result.message, result.user, HTTP_STATUS.OK);
     } catch (error) {
       return errorResponse(
         res,
@@ -81,7 +169,7 @@ class AuthController {
   }
 
   /**
-   * Change password
+   * Change password (when user knows old password)
    * POST /api/v1/auth/change-password
    */
   async changePassword(req, res) {
@@ -93,6 +181,48 @@ class AuthController {
         oldPassword,
         newPassword
       );
+
+      return successResponse(res, result.message, null, HTTP_STATUS.OK);
+    } catch (error) {
+      return errorResponse(
+        res,
+        error.message,
+        error,
+        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Forgot password - Send reset link
+   * POST /api/v1/auth/forgot-password
+   */
+  async forgotPassword(req, res) {
+    try {
+      const { email } = req.body;
+
+      const result = await authService.forgotPassword(email);
+
+      return successResponse(res, result.message, null, HTTP_STATUS.OK);
+    } catch (error) {
+      return errorResponse(
+        res,
+        error.message,
+        error,
+        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Reset password with token
+   * POST /api/v1/auth/reset-password
+   */
+  async resetPassword(req, res) {
+    try {
+      const { token, newPassword } = req.body;
+
+      const result = await authService.resetPassword(token, newPassword);
 
       return successResponse(res, result.message, null, HTTP_STATUS.OK);
     } catch (error) {

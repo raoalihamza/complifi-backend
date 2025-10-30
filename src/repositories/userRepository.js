@@ -2,13 +2,26 @@ const { User } = require("../models");
 
 class UserRepository {
   /**
+   * Create new user
+   */
+  async create(userData) {
+    try {
+      return await User.create(userData);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Find user by ID
    */
-  async findById(id) {
+  async findById(id, includePassword = false) {
     try {
-      return await User.findByPk(id, {
-        attributes: { exclude: ["password"] },
-      });
+      const options = {};
+      if (!includePassword) {
+        options.attributes = { exclude: ["password"] };
+      }
+      return await User.findByPk(id, options);
     } catch (error) {
       throw error;
     }
@@ -26,47 +39,29 @@ class UserRepository {
   }
 
   /**
-   * Create new user
+   * Find user by password reset token
    */
-  async create(userData) {
-    try {
-      return await User.create(userData);
-    } catch (error) {
-      throw error;
-    }
+  async findByPasswordResetToken(token) {
+    return await User.findOne({
+      where: {
+        passwordResetToken: token,
+      },
+    });
   }
 
   /**
    * Update user
    */
   async update(id, updateData) {
-    try {
-      const user = await User.findByPk(id);
-      if (!user) return null;
-
-      return await user.update(updateData);
-    } catch (error) {
-      throw error;
+    const user = await User.findByPk(id);
+    if (!user) {
+      throw new Error("User not found");
     }
+    return await user.update(updateData);
   }
 
   /**
-   * Delete user
-   */
-  async delete(id) {
-    try {
-      const user = await User.findByPk(id);
-      if (!user) return null;
-
-      await user.destroy();
-      return true;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Update last login timestamp
+   * Update last login
    */
   async updateLastLogin(id) {
     try {
@@ -77,7 +72,18 @@ class UserRepository {
   }
 
   /**
-   * Find all users with filters and pagination
+   * Delete user
+   */
+  async delete(id) {
+    const user = await User.findByPk(id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    return await user.destroy();
+  }
+
+  /**
+   * Find all users with filters and pagination (for admin purposes)
    */
   async findAll(filters = {}, pagination = {}) {
     try {
@@ -104,6 +110,13 @@ class UserRepository {
     } catch (error) {
       throw error;
     }
+  }
+
+  /**
+   * Count users
+   */
+  async count(where = {}) {
+    return await User.count({ where });
   }
 }
 
