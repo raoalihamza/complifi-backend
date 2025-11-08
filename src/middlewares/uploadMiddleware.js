@@ -2,133 +2,107 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-// Create upload directories if they don't exist
-const createUploadDirs = () => {
-  const dirs = ["uploads/statements", "uploads/receipts", "uploads/invoices"];
-  dirs.forEach((dir) => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+// Ensure upload directories exist
+const uploadDirs = {
+  statements: path.join(__dirname, "../../uploads/statements"),
+  receipts: path.join(__dirname, "../../uploads/receipts"),
+  invoices: path.join(__dirname, "../../uploads/invoices"),
+};
+
+// Create directories if they don't exist
+Object.values(uploadDirs).forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
+// Storage configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // Determine destination based on route/fieldname
+    let uploadPath = uploadDirs.statements; // default
+
+    if (file.fieldname === "receipts" || req.path.includes("/receipts")) {
+      uploadPath = uploadDirs.receipts;
+    } else if (
+      file.fieldname === "invoices" ||
+      req.path.includes("/invoices")
+    ) {
+      uploadPath = uploadDirs.invoices;
+    } else if (
+      file.fieldname === "statement" ||
+      req.path.includes("/statements")
+    ) {
+      uploadPath = uploadDirs.statements;
     }
-  });
-};
 
-createUploadDirs();
-
-// Storage configuration for statements
-const statementStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/statements/");
+    cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    const uniqueName = Date.now() + "-" + file.originalname;
-    cb(null, uniqueName);
+    // Generate unique filename: timestamp-randomnumber-originalname
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    const basename = path.basename(file.originalname, ext);
+    cb(null, `${basename}-${uniqueSuffix}${ext}`);
   },
 });
 
-// Storage configuration for receipts
-const receiptStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/receipts/");
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = Date.now() + "-" + file.originalname;
-    cb(null, uniqueName);
-  },
-});
+// File filter - allowed types
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = {
+    statements: [".pdf", ".csv", ".xlsx", ".xls"],
+    receipts: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+    invoices: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+  };
 
-// Storage configuration for invoices
-const invoiceStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/invoices/");
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = Date.now() + "-" + file.originalname;
-    cb(null, uniqueName);
-  },
-});
+  const ext = path.extname(file.originalname).toLowerCase();
+  let isValid = false;
 
-// File filter for statements (PDF, CSV, XLSX)
-const statementFileFilter = (req, file, cb) => {
-  const allowedTypes = /pdf|csv|xlsx|xls/;
-  const extname = allowedTypes.test(
-    path.extname(file.originalname).toLowerCase()
-  );
-  const mimetype =
-    allowedTypes.test(file.mimetype) ||
-    file.mimetype ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    file.mimetype === "application/vnd.ms-excel";
+  // Check based on fieldname or route
+  if (file.fieldname === "statement" || req.path.includes("/statements")) {
+    isValid = allowedTypes.statements.includes(ext);
+  } else if (file.fieldname === "receipts" || req.path.includes("/receipts")) {
+    isValid = allowedTypes.receipts.includes(ext);
+  } else if (file.fieldname === "invoices" || req.path.includes("/invoices")) {
+    isValid = allowedTypes.invoices.includes(ext);
+  }
 
-  if (extname && mimetype) {
+  if (isValid) {
     cb(null, true);
   } else {
-    cb(new Error("Only PDF, CSV, XLSX files are allowed for statements"));
+    cb(
+      new Error(
+        `Invalid file type. Allowed types: ${Object.values(allowedTypes)
+          .flat()
+          .join(", ")}`
+      ),
+      false
+    );
   }
 };
 
-// File filter for receipts/invoices (PDF, PNG, JPG, JPEG)
-const imageFileFilter = (req, file, cb) => {
-  const allowedTypes = /pdf|jpg|jpeg|png/;
-  const extname = allowedTypes.test(
-    path.extname(file.originalname).toLowerCase()
-  );
-  const mimetype =
-    allowedTypes.test(file.mimetype) || file.mimetype === "application/pdf";
-
-  if (extname && mimetype) {
-    cb(null, true);
-  } else {
-    cb(new Error("Only PDF, JPG, JPEG, PNG files are allowed"));
-  }
-};
-
-// Statement upload (single file, PDF/CSV/XLSX, 10MB max)
-const uploadStatement = multer({
-  storage: statementStorage,
-  fileFilter: statementFileFilter,
+// Multer upload instance
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
+    fileSize: 10 * 1024 * 1024, // 10MB limit
   },
-}).single("file");
+});
 
-// Receipt upload (multiple files, images/PDF, 5MB max per file)
-const uploadReceipts = multer({
-  storage: receiptStorage,
-  fileFilter: imageFileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB per file
-  },
-}).array("files", 10); // Max 10 files
-
-// Invoice upload (multiple files, images/PDF, 5MB max per file)
-const uploadInvoices = multer({
-  storage: invoiceStorage,
-  fileFilter: imageFileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB per file
-  },
-}).array("files", 10); // Max 10 files
-
-// Error handling middleware for multer
+// Error handling middleware
 const handleMulterError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
         success: false,
-        message:
-          "File too large. Maximum size allowed is 10MB for statements and 5MB for receipts/invoices.",
+        message: "File too large. Maximum size is 10MB.",
       });
     }
     if (err.code === "LIMIT_FILE_COUNT") {
       return res.status(400).json({
         success: false,
-        message: "Too many files. Maximum 10 files allowed.",
-      });
-    }
-    if (err.code === "LIMIT_UNEXPECTED_FILE") {
-      return res.status(400).json({
-        success: false,
-        message: "Unexpected field in form data.",
+        message: "Too many files. Maximum is 10 files at once.",
       });
     }
     return res.status(400).json({
@@ -148,8 +122,11 @@ const handleMulterError = (err, req, res, next) => {
 };
 
 module.exports = {
-  uploadStatement,
-  uploadReceipts,
-  uploadInvoices,
-  handleMulterError,
+  single: (fieldName) => [upload.single(fieldName), handleMulterError],
+  array: (fieldName, maxCount) => [
+    upload.array(fieldName, maxCount),
+    handleMulterError,
+  ],
+  fields: (fields) => [upload.fields(fields), handleMulterError],
+  uploadDirs,
 };

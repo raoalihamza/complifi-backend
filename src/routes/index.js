@@ -5,11 +5,17 @@ const router = express.Router();
 const authRoutes = require("./authRoutes");
 const workspaceRoutes = require("./workspaceRoutes");
 const folderRoutes = require("./folderRoutes");
+const transactionRoutes = require("./transactionRoutes");
+const receiptRoutes = require("./receiptRoutes");
+const invoiceRoutes = require("./invoiceRoutes");
 
 // Mount routes
 router.use("/auth", authRoutes);
 router.use("/workspaces", workspaceRoutes);
 router.use("/folders", folderRoutes);
+router.use("/transactions", transactionRoutes);
+router.use("/receipts", receiptRoutes);
+router.use("/invoices", invoiceRoutes);
 
 // Health check for API
 router.get("/", (req, res) => {
@@ -22,6 +28,9 @@ router.get("/", (req, res) => {
       auth: "/api/v1/auth",
       workspaces: "/api/v1/workspaces",
       folders: "/api/v1/folders",
+      transactions: "/api/v1/transactions",
+      receipts: "/api/v1/receipts",
+      invoices: "/api/v1/invoices",
     },
   });
 });

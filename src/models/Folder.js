@@ -149,23 +149,23 @@ module.exports = (sequelize, DataTypes) => {
       as: "assignedTo",
     });
 
-    // Folder has many Transactions (will be created in Phase 4)
-    // Folder.hasMany(models.Transaction, {
-    //   foreignKey: "folderId",
-    //   as: "transactions",
-    // });
+    // Folder has many Transactions 
+    Folder.hasMany(models.Transaction, {
+      foreignKey: "folderId",
+      as: "transactions",
+    });
 
-    // Folder has many Receipts (will be created in Phase 4)
-    // Folder.hasMany(models.Receipt, {
-    //   foreignKey: "folderId",
-    //   as: "receipts",
-    // });
+    // Folder has many Receipts 
+    Folder.hasMany(models.Receipt, {
+      foreignKey: "folderId",
+      as: "receipts",
+    });
 
-    // Folder has many Invoices (will be created in Phase 4)
-    // Folder.hasMany(models.Invoice, {
-    //   foreignKey: "folderId",
-    //   as: "invoices",
-    // });
+    // Folder has many Invoices 
+    Folder.hasMany(models.Invoice, {
+      foreignKey: "folderId",
+      as: "invoices",
+    });
   };
 
   return Folder;
