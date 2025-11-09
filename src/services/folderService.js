@@ -1,10 +1,12 @@
 const folderRepository = require("../repositories/folderRepository");
 const workspaceRepository = require("../repositories/workspaceRepository");
+const userRepository = require("../repositories/userRepository");
 const { HTTP_STATUS, WORKSPACE_ROLES } = require("../config/constants");
 
 class FolderService {
   /**
    * Create new folder
+   * SUPER_ADMIN and EDITOR can create folders
    */
   async createFolder(userId, workspaceId, folderData) {
     try {
@@ -17,19 +19,20 @@ class FolderService {
         throw error;
       }
 
-      // Verify user has permission (admin/editor)
+      // Check if user is SUPER_ADMIN
+      const user = await userRepository.findById(userId);
+      const isSuperAdmin = user && user.isSuperAdmin;
+
+      // Get user's workspace role
       const userRole = await workspaceRepository.getMemberRole(
         workspaceId,
         userId
       );
 
-      if (
-        userRole !== "owner" &&
-        userRole !== WORKSPACE_ROLES.ADMIN &&
-        userRole !== WORKSPACE_ROLES.EDITOR
-      ) {
+      // Only SUPER_ADMIN or EDITOR can create folders
+      if (!isSuperAdmin && userRole !== WORKSPACE_ROLES.EDITOR) {
         const error = new Error(
-          "Only workspace owner, admin or editor can create folders"
+          "Only company owner or editor can create folders"
         );
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
@@ -109,6 +112,7 @@ class FolderService {
 
   /**
    * Update folder
+   * SUPER_ADMIN and EDITOR can update folders
    */
   async updateFolder(userId, folderId, updateData) {
     try {
@@ -121,19 +125,20 @@ class FolderService {
         throw error;
       }
 
-      // Verify user has permission
+      // Check if user is SUPER_ADMIN
+      const user = await userRepository.findById(userId);
+      const isSuperAdmin = user && user.isSuperAdmin;
+
+      // Get user's workspace role
       const userRole = await workspaceRepository.getMemberRole(
         folder.workspaceId,
         userId
       );
 
-      if (
-        userRole !== "owner" &&
-        userRole !== WORKSPACE_ROLES.ADMIN &&
-        userRole !== WORKSPACE_ROLES.EDITOR
-      ) {
+      // Only SUPER_ADMIN or EDITOR can update folders
+      if (!isSuperAdmin && userRole !== WORKSPACE_ROLES.EDITOR) {
         const error = new Error(
-          "Only workspace owner, admin or editor can update folders"
+          "Only company owner or editor can update folders"
         );
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
@@ -155,10 +160,7 @@ class FolderService {
         }
       });
 
-      const updatedFolder = await folderRepository.update(
-        folderId,
-        filteredData
-      );
+      await folderRepository.update(folderId, filteredData);
       return await folderRepository.findById(folderId, true);
     } catch (error) {
       throw error;
@@ -167,29 +169,25 @@ class FolderService {
 
   /**
    * Delete folder
+   * Only SUPER_ADMIN can delete folders
    */
   async deleteFolder(userId, folderId) {
     try {
+      // Verify user is Super Admin
+      const user = await userRepository.findById(userId);
+
+      if (!user || !user.isSuperAdmin) {
+        const error = new Error("Only company owner can delete folders");
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
       // Get folder
       const folder = await folderRepository.findById(folderId);
 
       if (!folder) {
         const error = new Error("Folder not found");
         error.statusCode = HTTP_STATUS.NOT_FOUND;
-        throw error;
-      }
-
-      // Verify user has permission (owner/admin)
-      const userRole = await workspaceRepository.getMemberRole(
-        folder.workspaceId,
-        userId
-      );
-
-      if (userRole !== "owner" && userRole !== WORKSPACE_ROLES.ADMIN) {
-        const error = new Error(
-          "Only workspace owner or admin can delete folders"
-        );
-        error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
       }
 
@@ -206,6 +204,7 @@ class FolderService {
 
   /**
    * Assign folder to user
+   * SUPER_ADMIN and EDITOR can assign folders
    */
   async assignFolder(userId, folderId, assigneeId) {
     try {
@@ -218,19 +217,20 @@ class FolderService {
         throw error;
       }
 
-      // Verify user has permission
+      // Check if user is SUPER_ADMIN
+      const user = await userRepository.findById(userId);
+      const isSuperAdmin = user && user.isSuperAdmin;
+
+      // Get user's workspace role
       const userRole = await workspaceRepository.getMemberRole(
         folder.workspaceId,
         userId
       );
 
-      if (
-        userRole !== "owner" &&
-        userRole !== WORKSPACE_ROLES.ADMIN &&
-        userRole !== WORKSPACE_ROLES.EDITOR
-      ) {
+      // Only SUPER_ADMIN or EDITOR can assign folders
+      if (!isSuperAdmin && userRole !== WORKSPACE_ROLES.EDITOR) {
         const error = new Error(
-          "Only workspace owner, admin or editor can assign folders"
+          "Only company owner or editor can assign folders"
         );
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;

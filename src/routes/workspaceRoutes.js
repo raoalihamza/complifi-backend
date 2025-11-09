@@ -2,10 +2,7 @@ const express = require("express");
 const router = express.Router();
 const workspaceController = require("../controllers/workspaceController");
 const { protect } = require("../middlewares/authMiddleware");
-const {
-  checkWorkspaceAccess,
-  checkWorkspaceRole,
-} = require("../middlewares/workspaceMiddleware");
+const { checkWorkspaceAccess } = require("../middlewares/workspaceMiddleware");
 const validate = require("../middlewares/validator");
 const {
   createWorkspaceSchema,
@@ -46,21 +43,22 @@ router.get(
 
 // Update workspace
 // PUT /api/v1/workspaces/:id
+// Only SUPER_ADMIN can update workspaces
 router.put(
   "/:id",
   protect,
-  checkWorkspaceAccess,
-  checkWorkspaceRole("owner", "admin"),
+  checkSuperAdmin,
   validate(updateWorkspaceSchema),
   workspaceController.updateWorkspace
 );
 
 // Delete workspace
 // DELETE /api/v1/workspaces/:id
+// Only SUPER_ADMIN can delete workspaces
 router.delete(
   "/:id",
   protect,
-  checkWorkspaceAccess,
+  checkSuperAdmin,
   workspaceController.deleteWorkspace
 );
 
@@ -99,21 +97,21 @@ router.post(
 
 // Remove member from workspace
 // DELETE /api/v1/workspaces/:id/members/:memberId
+// Only SUPER_ADMIN can remove members
 router.delete(
   "/:id/members/:memberId",
   protect,
-  checkWorkspaceAccess,
-  checkWorkspaceRole("owner", "admin"),
+  checkSuperAdmin,
   workspaceController.removeMember
 );
 
 // Update member role
 // PATCH /api/v1/workspaces/:id/members/:memberId
+// Only SUPER_ADMIN can update member roles
 router.patch(
   "/:id/members/:memberId",
   protect,
-  checkWorkspaceAccess,
-  checkWorkspaceRole("owner", "admin"),
+  checkSuperAdmin,
   validate(updateMemberRoleSchema),
   workspaceController.updateMemberRole
 );

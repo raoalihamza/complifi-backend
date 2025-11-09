@@ -27,10 +27,6 @@ module.exports = (sequelize, DataTypes) => {
       createdBy: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        references: {
-          model: "users",
-          key: "id",
-        },
         field: "created_by",
       },
       isActive: {

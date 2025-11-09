@@ -1,6 +1,6 @@
 const workspaceRepository = require("../repositories/workspaceRepository");
 const userRepository = require("../repositories/userRepository");
-const { HTTP_STATUS, WORKSPACE_ROLES } = require("../config/constants");
+const { HTTP_STATUS } = require("../config/constants");
 const { sequelize } = require("../models");
 const { Workspace, WorkspaceMember, User } = require("../models");
 const emailService = require("../services/emailService"); 
@@ -132,36 +132,30 @@ class WorkspaceService {
 
   /**
    * Update workspace
-   * Only owner or admin can update
+   * Only SUPER_ADMIN (company owner) can update
    */
   async updateWorkspace(workspaceId, userId, updateData) {
     try {
-      // Get user's role
-      const userRole = await workspaceRepository.getMemberRole(
-        workspaceId,
-        userId
-      );
+      // Verify user is Super Admin
+      const user = await userRepository.findById(userId);
 
-      // Check permission (only owner or admin)
-      if (userRole !== "owner" && userRole !== WORKSPACE_ROLES.ADMIN) {
-        const error = new Error(
-          "Only workspace owner or admin can update workspace"
-        );
+      if (!user || !user.isSuperAdmin) {
+        const error = new Error("Only company owner can update workspace");
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
       }
 
-      // Update workspace
-      const updatedWorkspace = await workspaceRepository.update(
-        workspaceId,
-        updateData
-      );
+      // Verify workspace exists
+      const workspace = await workspaceRepository.findById(workspaceId);
 
-      if (!updatedWorkspace) {
+      if (!workspace) {
         const error = new Error("Workspace not found");
         error.statusCode = HTTP_STATUS.NOT_FOUND;
         throw error;
       }
+
+      // Update workspace
+      await workspaceRepository.update(workspaceId, updateData);
 
       return await workspaceRepository.findById(workspaceId, true);
     } catch (error) {
@@ -171,23 +165,25 @@ class WorkspaceService {
 
   /**
    * Delete workspace
-   * Only owner can delete
+   * Only SUPER_ADMIN (company owner) can delete
    */
   async deleteWorkspace(workspaceId, userId) {
     try {
+      // Verify user is Super Admin
+      const user = await userRepository.findById(userId);
+
+      if (!user || !user.isSuperAdmin) {
+        const error = new Error("Only company owner can delete workspace");
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
       // Get workspace
       const workspace = await workspaceRepository.findById(workspaceId);
 
       if (!workspace) {
         const error = new Error("Workspace not found");
         error.statusCode = HTTP_STATUS.NOT_FOUND;
-        throw error;
-      }
-
-      // Check if user is owner (creator)
-      if (workspace.createdBy !== userId) {
-        const error = new Error("Only workspace owner can delete workspace");
-        error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
       }
 
@@ -202,31 +198,23 @@ class WorkspaceService {
 
   /**
    * Remove member from workspace
-   * Only owner or admin can remove
-   * Cannot remove owner
+   * Only SUPER_ADMIN (company owner) can remove
+   * Cannot remove the company owner themselves
    */
   async removeMember(workspaceId, removerId, memberId) {
     try {
-      // Check remover's permission
-      const removerRole = await workspaceRepository.getMemberRole(
-        workspaceId,
-        removerId
-      );
+      // Verify remover is Super Admin
+      const remover = await userRepository.findById(removerId);
 
-      if (removerRole !== "owner" && removerRole !== WORKSPACE_ROLES.ADMIN) {
-        const error = new Error(
-          "Only workspace owner or admin can remove members"
-        );
+      if (!remover || !remover.isSuperAdmin) {
+        const error = new Error("Only company owner can remove members");
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
       }
 
-      // Get workspace
-      const workspace = await workspaceRepository.findById(workspaceId);
-
-      // Cannot remove owner (creator)
-      if (workspace.createdBy === memberId) {
-        const error = new Error("Cannot remove workspace owner");
+      // Cannot remove themselves
+      if (removerId === memberId) {
+        const error = new Error("Cannot remove company owner from workspace");
         error.statusCode = HTTP_STATUS.BAD_REQUEST;
         throw error;
       }
@@ -251,31 +239,23 @@ class WorkspaceService {
 
   /**
    * Update member role
-   * Only owner or admin can update roles
-   * Cannot change owner's role
+   * Only SUPER_ADMIN (company owner) can update roles
+   * Cannot change company owner's role
    */
   async updateMemberRole(workspaceId, updaterId, memberId, newRole) {
     try {
-      // Check updater's permission
-      const updaterRole = await workspaceRepository.getMemberRole(
-        workspaceId,
-        updaterId
-      );
+      // Verify updater is Super Admin
+      const updater = await userRepository.findById(updaterId);
 
-      if (updaterRole !== "owner" && updaterRole !== WORKSPACE_ROLES.ADMIN) {
-        const error = new Error(
-          "Only workspace owner or admin can update member roles"
-        );
+      if (!updater || !updater.isSuperAdmin) {
+        const error = new Error("Only company owner can update member roles");
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
       }
 
-      // Get workspace
-      const workspace = await workspaceRepository.findById(workspaceId);
-
-      // Cannot change owner's role (creator)
-      if (workspace.createdBy === memberId) {
-        const error = new Error("Cannot change workspace owner's role");
+      // Cannot change their own role
+      if (updaterId === memberId) {
+        const error = new Error("Cannot change company owner's role");
         error.statusCode = HTTP_STATUS.BAD_REQUEST;
         throw error;
       }
