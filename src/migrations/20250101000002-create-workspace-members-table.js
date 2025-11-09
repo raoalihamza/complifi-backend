@@ -22,7 +22,7 @@ module.exports = {
       },
       user_id: {
         type: Sequelize.INTEGER,
-        allowNull: false,
+        allowNull: true, // Allow null for pending invitations
         references: {
           model: "users",
           key: "id",
@@ -31,14 +31,38 @@ module.exports = {
         onDelete: "CASCADE",
       },
       role: {
-        type: Sequelize.ENUM("admin", "editor", "viewer"),
+        type: Sequelize.ENUM("editor", "viewer"),
         allowNull: false,
         defaultValue: "viewer",
       },
-      joined_at: {
+      invited_by: {
+        type: Sequelize.INTEGER,
+        allowNull: false,
+        references: {
+          model: "users",
+          key: "id",
+        },
+        onUpdate: "CASCADE",
+        onDelete: "RESTRICT",
+      },
+      invitation_token: {
+        type: Sequelize.STRING(255),
+        allowNull: true,
+        unique: true,
+      },
+      invitation_accepted: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      invited_at: {
         type: Sequelize.DATE,
         allowNull: false,
         defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
+      },
+      accepted_at: {
+        type: Sequelize.DATE,
+        allowNull: true,
       },
       created_at: {
         type: Sequelize.DATE,
@@ -59,23 +83,11 @@ module.exports = {
       name: "unique_workspace_user",
     });
 
-    // Add indexes for faster lookups
-    await queryInterface.addIndex("workspace_members", ["workspace_id"], {
-      name: "workspace_members_workspace_id_idx",
+    await queryInterface.addIndex("workspace_members", ["workspace_id"]);
+    await queryInterface.addIndex("workspace_members", ["user_id"]);
+    await queryInterface.addIndex("workspace_members", ["invitation_token"], {
+      unique: true,
     });
-
-    await queryInterface.addIndex("workspace_members", ["user_id"], {
-      name: "workspace_members_user_id_idx",
-    });
-
-    // Composite index for workspace + user queries
-    await queryInterface.addIndex(
-      "workspace_members",
-      ["workspace_id", "user_id"],
-      {
-        name: "workspace_members_workspace_user_idx",
-      }
-    );
   },
 
   async down(queryInterface, Sequelize) {

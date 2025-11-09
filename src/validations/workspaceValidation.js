@@ -23,17 +23,36 @@ const inviteMemberSchema = Joi.object({
     "string.email": "Please provide a valid email",
     "any.required": "Email is required",
   }),
-  role: Joi.string().valid("admin", "editor", "viewer").required().messages({
-    "any.only": "Role must be one of: admin, editor, viewer",
+  role: Joi.string().valid("editor", "viewer").required().messages({
+    "any.only": "Role must be one of: editor, viewer",
     "any.required": "Role is required",
   }),
 });
 
 // Update Member Role Schema
 const updateMemberRoleSchema = Joi.object({
-  role: Joi.string().valid("admin", "editor", "viewer").required().messages({
-    "any.only": "Role must be one of: admin, editor, viewer",
+  role: Joi.string().valid("editor", "viewer").required().messages({
+    "any.only": "Role must be one of: editor, viewer",
     "any.required": "Role is required",
+  }),
+});
+
+const acceptInvitationSchema = Joi.object({
+  token: Joi.string().required().messages({
+    "any.required": "Invitation token is required",
+  }),
+  userData: Joi.object({
+    name: Joi.string().min(2).max(100).required().messages({
+      "string.min": "Name must be at least 2 characters long",
+      "string.max": "Name cannot exceed 100 characters",
+      "any.required": "Name is required",
+    }),
+    password: Joi.string().min(8).required().messages({
+      "string.min": "Password must be at least 8 characters long",
+      "any.required": "Password is required",
+    }),
+  }).required().messages({
+    "any.required": "User data is required",
   }),
 });
 
@@ -42,4 +61,5 @@ module.exports = {
   updateWorkspaceSchema,
   inviteMemberSchema,
   updateMemberRoleSchema,
+  acceptInvitationSchema,
 };

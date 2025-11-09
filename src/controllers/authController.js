@@ -4,40 +4,6 @@ const { HTTP_STATUS } = require("../config/constants");
 
 class AuthController {
   /**
-   * Register new user
-   * POST /api/v1/auth/register
-   */
-  async register(req, res) {
-    try {
-      const { email, password, name, role } = req.body;
-
-      const result = await authService.register({
-        email,
-        password,
-        name,
-        role,
-      });
-
-      return successResponse(
-        res,
-        result.message,
-        {
-          token: result.token,
-          user: result.user,
-        },
-        HTTP_STATUS.CREATED
-      );
-    } catch (error) {
-      return errorResponse(
-        res,
-        error.message,
-        error,
-        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  /**
    * Verify email with OTP
    * POST /api/v1/auth/verify-email
    */

@@ -1,5 +1,3 @@
-const { WORKSPACE_ROLES } = require("../config/constants");
-
 module.exports = (sequelize, DataTypes) => {
   const Workspace = sequelize.define(
     "Workspace",
@@ -22,21 +20,38 @@ module.exports = (sequelize, DataTypes) => {
           },
         },
       },
-      ownerId: {
+      description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      createdBy: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        field: "owner_id",
         references: {
           model: "users",
           key: "id",
         },
-        onDelete: "CASCADE",
+        field: "created_by",
+      },
+      isActive: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+        field: "is_active",
       },
     },
     {
       tableName: "workspaces",
       underscored: true,
       timestamps: true,
+      indexes: [
+        {
+          fields: ["created_by"],
+        },
+        {
+          fields: ["is_active"],
+        },
+      ],
     }
   );
 
@@ -44,8 +59,8 @@ module.exports = (sequelize, DataTypes) => {
   Workspace.associate = (models) => {
     // Workspace belongs to a User (owner)
     Workspace.belongsTo(models.User, {
-      foreignKey: "ownerId",
-      as: "owner",
+      foreignKey: "createdBy",
+      as: "creator",
     });
 
     // Workspace has many members through WorkspaceMember

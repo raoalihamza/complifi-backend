@@ -282,6 +282,78 @@ class EmailService {
       text,
     });
   }
+
+  /**
+   * Send workspace invitation email
+   */
+  async sendWorkspaceInvitationEmail(
+    email,
+    inviterName,
+    workspaceName,
+    role,
+    token
+  ) {
+    try {
+      const invitationLink = `${process.env.FRONTEND_URL}accept-invitation?token=${token}`;
+      console.log(
+        "Invitation link:",
+        invitationLink,
+        email,
+        inviterName,
+        workspaceName,
+        role,
+        token
+      );
+
+      const mailOptions = {
+        from: process.env.MAILGUN_FROM_EMAIL,
+        to: email,
+        subject: `You've been invited to join ${workspaceName}`,
+        html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: #4CAF50; color: white; padding: 20px; text-align: center; }
+            .content { background: #f9f9f9; padding: 30px; border-radius: 5px; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 30px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+            .footer { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Workspace Invitation</h1>
+            </div>
+            <div class="content">
+              <p>Hello,</p>
+              <p><strong>${inviterName}</strong> has invited you to join <strong>${workspaceName}</strong> on CompliFi.</p>
+              <p>You've been assigned the role of: <strong>${role}</strong></p>
+              <p>Click the button below to accept the invitation:</p>
+              <div style="text-align: center;">
+                <a href="${invitationLink}" class="button">Accept Invitation</a>
+              </div>
+              <p>Or copy and paste this link in your browser:</p>
+              <p style="word-break: break-all; color: #666;">${invitationLink}</p>
+              <p><strong>Note:</strong> This invitation link is valid for 7 days.</p>
+            </div>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} CompliFi. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      };
+
+      return await this.sendEmail(mailOptions);
+    } catch (error) {
+      console.error("Error sending invitation email:", error);
+      throw new Error("Failed to send invitation email");
+    }
+  }
 }
 
 module.exports = new EmailService();

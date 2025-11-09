@@ -15,6 +15,9 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
 async function testConnection() {
   try {
     console.log("Testing Supabase connection...\n");
+    const bcrypt = require("bcryptjs");
+    const hash = bcrypt.hashSync("SecurePassword123!", 10);
+    console.log("haashed password", hash);
 
     await sequelize.authenticate();
     console.log("✅ Supabase Database connected successfully!");

@@ -5,9 +5,10 @@ class WorkspaceRepository {
   /**
    * Create new workspace
    */
-  async create(workspaceData) {
+  async create(workspaceData, transaction = null) {
     try {
-      return await Workspace.create(workspaceData);
+      const options = transaction ? { transaction } : {};
+      return await Workspace.create(workspaceData, options);
     } catch (error) {
       throw error;
     }
@@ -16,18 +17,22 @@ class WorkspaceRepository {
   /**
    * Find workspace by ID
    */
-  async findById(id, includeMembers = false) {
+  async findById(id, includeMembers = false, transaction = null) {
     try {
       const options = {
         where: { id },
         include: [
           {
             model: User,
-            as: "owner",
+            as: "creator",
             attributes: ["id", "name", "email"],
           },
         ],
       };
+
+      if (transaction) {
+        options.transaction = transaction;
+      }
 
       if (includeMembers) {
         options.include.push({
@@ -54,12 +59,13 @@ class WorkspaceRepository {
    */
   async findByOwnerId(ownerId) {
     try {
+      // ownerId here represents the creator's user id
       return await Workspace.findAll({
-        where: { ownerId },
+        where: { createdBy: ownerId },
         include: [
           {
             model: User,
-            as: "owner",
+            as: "creator",
             attributes: ["id", "name", "email"],
           },
         ],
@@ -75,62 +81,57 @@ class WorkspaceRepository {
    */
   async findUserWorkspaces(userId) {
     try {
-      // Get workspaces where user is owner
+      // Get all workspace IDs where user is creator
       const ownedWorkspaces = await Workspace.findAll({
-        where: { ownerId: userId },
+        where: { createdBy: userId },
+        attributes: ["id"],
+      });
+
+      // Get all workspace IDs where user is a member
+      const memberWorkspaces = await WorkspaceMember.findAll({
+        where: { userId, status: "active" },
+        attributes: ["workspaceId"],
+      });
+
+      // Combine all workspace IDs
+      const workspaceIds = [
+        ...ownedWorkspaces.map((w) => w.id),
+        ...memberWorkspaces.map((m) => m.workspaceId),
+      ];
+
+      // Remove duplicates
+      const uniqueWorkspaceIds = [...new Set(workspaceIds)];
+
+      // Fetch all workspaces with their members
+      const workspaces = await Workspace.findAll({
+        where: { id: uniqueWorkspaceIds },
         include: [
           {
             model: User,
-            as: "owner",
+            as: "creator",
             attributes: ["id", "name", "email"],
-          },
-          {
-            model: WorkspaceMember,
-            as: "members",
-            include: [
-              {
-                model: User,
-                as: "user",
-                attributes: ["id", "name", "email"],
-              },
-            ],
           },
         ],
         order: [["createdAt", "DESC"]],
       });
 
-      // Get workspaces where user is member
-      const memberWorkspaces = await Workspace.findAll({
-        include: [
-          {
-            model: User,
-            as: "owner",
-            attributes: ["id", "name", "email"],
-          },
-          {
-            model: WorkspaceMember,
-            as: "members",
-            where: { userId },
-            required: true,
-            include: [
-              {
-                model: User,
-                as: "user",
-                attributes: ["id", "name", "email"],
-              },
-            ],
-          },
-        ],
-        order: [["createdAt", "DESC"]],
-      });
+      // Fetch all active members for each workspace
+      for (const workspace of workspaces) {
+        const members = await WorkspaceMember.findAll({
+          where: { workspaceId: workspace.id, status: "active" },
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "name", "email"],
+            },
+          ],
+          order: [["joinedAt", "ASC"]],
+        });
+        workspace.dataValues.members = members;
+      }
 
-      // Combine and remove duplicates
-      const allWorkspaces = [...ownedWorkspaces, ...memberWorkspaces];
-      const uniqueWorkspaces = Array.from(
-        new Map(allWorkspaces.map((w) => [w.id, w])).values()
-      );
-
-      return uniqueWorkspaces;
+      return workspaces;
     } catch (error) {
       throw error;
     }
@@ -168,13 +169,35 @@ class WorkspaceRepository {
   /**
    * Add member to workspace
    */
-  async addMember(workspaceId, userId, role) {
+  async addMember(
+    workspaceId,
+    userId,
+    role,
+    invitedBy = null,
+    transaction = null
+  ) {
     try {
-      return await WorkspaceMember.create({
+      // Fetch user's email
+      const user = await User.findByPk(userId);
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      const memberData = {
         workspaceId,
         userId,
+        email: user.email, // Add email from user
         role,
-      });
+        invitedBy,
+        invitedAt: new Date(),
+        joinedAt: new Date(),
+        invitationAccepted: true,
+        status: "active", // Set as active when directly adding a member
+      };
+
+      const options = transaction ? { transaction } : {};
+      return await WorkspaceMember.create(memberData, options);
     } catch (error) {
       throw error;
     }
@@ -241,9 +264,9 @@ class WorkspaceRepository {
    */
   async isMember(workspaceId, userId) {
     try {
-      // Check if user is owner
+      // Check if user is creator
       const workspace = await Workspace.findOne({
-        where: { id: workspaceId, ownerId: userId },
+        where: { id: workspaceId, createdBy: userId },
       });
 
       if (workspace) return true;
@@ -264,9 +287,9 @@ class WorkspaceRepository {
    */
   async getMemberRole(workspaceId, userId) {
     try {
-      // Check if user is owner
+      // Check if user is creator
       const workspace = await Workspace.findOne({
-        where: { id: workspaceId, ownerId: userId },
+        where: { id: workspaceId, createdBy: userId },
       });
 
       if (workspace) return "owner";
@@ -277,6 +300,131 @@ class WorkspaceRepository {
       });
 
       return member ? member.role : null;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Find workspace member by invitation token
+   */
+  async findByInvitationToken(token) {
+    try {
+      const { WorkspaceMember, Workspace, User } = require("../models");
+
+      const member = await WorkspaceMember.findOne({
+        where: {
+          invitationToken: token,
+          invitationTokenExpiry: {
+            [require("sequelize").Op.gt]: new Date(),
+          },
+        },
+        include: [
+          {
+            model: Workspace,
+            as: "workspace",
+          },
+          {
+            model: User,
+            as: "inviter",
+            attributes: ["id", "name", "email"],
+          },
+        ],
+      });
+
+      return member;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Create pending workspace member with invitation
+   */
+  async createPendingMember(
+    workspaceId,
+    email,
+    role,
+    invitedBy,
+    invitationToken
+  ) {
+    try {
+      const { WorkspaceMember } = require("../models");
+      const crypto = require("crypto");
+
+      console.log("Creating pending member", {
+        workspaceId,
+        email,
+        role,
+        invitedBy,
+        invitationToken,
+      });
+
+      // Check if invitation already exists
+      const existingInvitation = await WorkspaceMember.findOne({
+        where: {
+          workspaceId,
+          invitationToken: { [require("sequelize").Op.ne]: null },
+          status: "pending",
+        },
+        include: [
+          {
+            model: require("../models").User,
+            as: "user",
+            where: { email },
+          },
+        ],
+      });
+
+      if (existingInvitation) {
+        // Update existing invitation
+        return await existingInvitation.update({
+          email, // Update email as well
+          role,
+          invitationToken,
+          invitationTokenExpiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+          invitedBy,
+          invitedAt: new Date(),
+        });
+      }
+
+      // Create new pending member
+      return await WorkspaceMember.create({
+        workspaceId,
+        userId: null, // Will be set when invitation is accepted
+        email, // Store email for pending invitations
+        role,
+        invitationToken,
+        invitationTokenExpiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        invitedBy,
+        invitedAt: new Date(),
+        status: "pending",
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Activate pending member after accepting invitation
+   */
+  async activatePendingMember(invitationToken, userId) {
+    try {
+      const { WorkspaceMember } = require("../models");
+
+      const member = await WorkspaceMember.findOne({
+        where: { invitationToken },
+      });
+
+      if (!member) return null;
+
+      return await member.update({
+        userId,
+        status: "active",
+        joinedAt: new Date(),
+        invitationToken: null,
+        invitationTokenExpiry: null,
+      });
     } catch (error) {
       throw error;
     }

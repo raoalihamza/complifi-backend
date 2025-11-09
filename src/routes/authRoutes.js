@@ -3,7 +3,6 @@ const router = express.Router();
 const authController = require("../controllers/authController");
 const { protect } = require("../middlewares/authMiddleware");
 const {
-  registerSchema,
   verifyEmailSchema,
   resendOTPSchema,
   loginSchema,
@@ -33,12 +32,6 @@ const validate = (schema) => {
  * PUBLIC ROUTES (No authentication required)
  * ========================================
  */
-
-/**
- * Register new user
- * POST /api/v1/auth/register
- */
-router.post("/register", validate(registerSchema), authController.register);
 
 /**
  * Verify email with OTP

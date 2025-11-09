@@ -2,35 +2,64 @@ const workspaceRepository = require("../repositories/workspaceRepository");
 const userRepository = require("../repositories/userRepository");
 const { HTTP_STATUS, WORKSPACE_ROLES } = require("../config/constants");
 const { sequelize } = require("../models");
+const { Workspace, WorkspaceMember, User } = require("../models");
+const emailService = require("../services/emailService"); 
 
 class WorkspaceService {
   /**
-   * Create new workspace
-   * Automatically adds creator as admin member
+   * Create new workspace (Super Admin only)
+   * Automatically adds Super Admin as workspace member
    */
   async createWorkspace(userId, workspaceData) {
     const transaction = await sequelize.transaction();
 
     try {
-      // Create workspace
-      const workspace = await workspaceRepository.create({
-        ...workspaceData,
-        ownerId: userId,
-      });
+      // Verify user is Super Admin
+      const user = await userRepository.findById(userId);
 
-      // Add creator as admin member
+      if (!user || !user.isSuperAdmin) {
+        const error = new Error("Only Super Admin can create workspaces");
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
+      // Create workspace using repository
+      const workspace = await workspaceRepository.create(
+        {
+          ...workspaceData,
+          createdBy: userId,
+        },
+        transaction
+      );
+
+      // Add Super Admin as workspace member (editor role) using repository
       await workspaceRepository.addMember(
         workspace.id,
         userId,
-        WORKSPACE_ROLES.ADMIN
+        "editor", // Super Admin gets editor role in workspace
+        userId, // Super Admin invites themselves (self-invitation)
+        transaction
+      );
+
+      // Fetch workspace with members using repository (inside transaction)
+      const workspaceWithMembers = await workspaceRepository.findById(
+        workspace.id,
+        true,
+        transaction
       );
 
       await transaction.commit();
 
-      // Fetch workspace with members
-      return await workspaceRepository.findById(workspace.id, true);
+      return workspaceWithMembers;
     } catch (error) {
-      await transaction.rollback();
+      // only rollback if transaction not finished (avoid rollback-after-commit error)
+      if (transaction && !transaction.finished) {
+        try {
+          await transaction.rollback();
+        } catch (_) {
+          // swallow rollback errors
+        }
+      }
       throw error;
     }
   }
@@ -155,8 +184,8 @@ class WorkspaceService {
         throw error;
       }
 
-      // Check if user is owner
-      if (workspace.ownerId !== userId) {
+      // Check if user is owner (creator)
+      if (workspace.createdBy !== userId) {
         const error = new Error("Only workspace owner can delete workspace");
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
@@ -166,56 +195,6 @@ class WorkspaceService {
       await workspaceRepository.delete(workspaceId);
 
       return { message: "Workspace deleted successfully" };
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
-   * Invite member to workspace
-   * Only owner or admin can invite
-   */
-  async inviteMember(workspaceId, inviterId, memberEmail, role) {
-    try {
-      // Check inviter's permission
-      const inviterRole = await workspaceRepository.getMemberRole(
-        workspaceId,
-        inviterId
-      );
-
-      if (inviterRole !== "owner" && inviterRole !== WORKSPACE_ROLES.ADMIN) {
-        const error = new Error(
-          "Only workspace owner or admin can invite members"
-        );
-        error.statusCode = HTTP_STATUS.FORBIDDEN;
-        throw error;
-      }
-
-      // Find user by email
-      const user = await userRepository.findByEmail(memberEmail);
-
-      if (!user) {
-        const error = new Error("User with this email not found");
-        error.statusCode = HTTP_STATUS.NOT_FOUND;
-        throw error;
-      }
-
-      // Check if user is already a member
-      const isMember = await workspaceRepository.isMember(workspaceId, user.id);
-
-      if (isMember) {
-        const error = new Error("User is already a member of this workspace");
-        error.statusCode = HTTP_STATUS.CONFLICT;
-        throw error;
-      }
-
-      // Add member
-      await workspaceRepository.addMember(workspaceId, user.id, role);
-
-      // Get updated members list
-      const members = await workspaceRepository.getMembers(workspaceId);
-
-      return members.find((m) => m.userId === user.id);
     } catch (error) {
       throw error;
     }
@@ -245,8 +224,8 @@ class WorkspaceService {
       // Get workspace
       const workspace = await workspaceRepository.findById(workspaceId);
 
-      // Cannot remove owner
-      if (workspace.ownerId === memberId) {
+      // Cannot remove owner (creator)
+      if (workspace.createdBy === memberId) {
         const error = new Error("Cannot remove workspace owner");
         error.statusCode = HTTP_STATUS.BAD_REQUEST;
         throw error;
@@ -294,8 +273,8 @@ class WorkspaceService {
       // Get workspace
       const workspace = await workspaceRepository.findById(workspaceId);
 
-      // Cannot change owner's role
-      if (workspace.ownerId === memberId) {
+      // Cannot change owner's role (creator)
+      if (workspace.createdBy === memberId) {
         const error = new Error("Cannot change workspace owner's role");
         error.statusCode = HTTP_STATUS.BAD_REQUEST;
         throw error;
@@ -340,6 +319,174 @@ class WorkspaceService {
       // Get workspace details
       return await this.getWorkspaceById(workspaceId, userId);
     } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Invite new member to workspace (Super Admin only)
+   * Sends invitation email with token
+   */
+  async inviteMember(userId, workspaceId, invitationData) {
+    try {
+      console.log("Inviting member to workspace service", userId, workspaceId, invitationData);
+      const { email, role } = invitationData;
+
+      // Verify user is Super Admin
+      const user = await userRepository.findById(userId);
+
+      if (!user || !user.isSuperAdmin) {
+        const error = new Error("Only Super Admin can invite members");
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
+      // Verify workspace exists using repository
+      const workspace = await workspaceRepository.findById(workspaceId);
+
+      if (!workspace) {
+        const error = new Error("Workspace not found");
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      // Check if email is already invited to this workspace (pending or active)
+      const existingMember = await WorkspaceMember.findOne({
+        where: {
+          workspaceId,
+          email,
+        },
+      });
+
+      if (existingMember) {
+        const error = new Error(
+          existingMember.status === "pending"
+            ? "An invitation has already been sent to this email address"
+            : "This email is already a member of this workspace"
+        );
+        error.statusCode = HTTP_STATUS.CONFLICT;
+        throw error;
+      }
+
+      // Check if user already exists
+      const existingUser = await userRepository.findByEmail(email);
+
+      if (existingUser) {
+        // Check if already a member using repository
+        const isMember = await workspaceRepository.isMember(
+          workspaceId,
+          existingUser.id
+        );
+
+        if (isMember) {
+          const error = new Error("User is already a member of this workspace");
+          error.statusCode = HTTP_STATUS.CONFLICT;
+          throw error;
+        }
+      }
+
+      // Generate invitation token
+      const crypto = require("crypto");
+      const invitationToken = crypto.randomBytes(32).toString("hex");
+
+      // Create pending member invitation using repository
+      await workspaceRepository.createPendingMember(
+        workspaceId,
+        email,
+        role,
+        userId,
+        invitationToken
+      );
+
+      // Send invitation email
+      await emailService.sendWorkspaceInvitationEmail(
+        email,
+        user.name,
+        workspace.name,
+        role,
+        invitationToken
+      );
+
+      return {
+        message: "Invitation sent successfully",
+        email,
+        role,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Accept workspace invitation
+   * Auto-creates user account if doesn't exist
+   * Auto-verifies email (no OTP needed)
+   */
+  async acceptInvitation(token, userData) {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Find invitation using repository
+      const invitation = await workspaceRepository.findByInvitationToken(token);
+
+      if (!invitation) {
+        const error = new Error("Invalid or expired invitation");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      const { workspace, email } = invitation;
+
+      // Verify email is stored in invitation
+      if (!email) {
+        const error = new Error("Invalid invitation: email not found");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      // Check if user already exists
+      let user = await userRepository.findByEmail(email);
+
+      if (!user) {
+        // Create new user (auto-verified) with email from invitation
+        user = await userRepository.create(
+          {
+            ...userData, // name, password
+            email, // Email from invitation
+            isEmailVerified: true, // Auto-verify
+            hasCompletedOnboarding: true,
+            isSuperAdmin: false,
+          },
+          transaction
+        );
+      }
+
+      // Activate pending member using repository
+      await workspaceRepository.activatePendingMember(
+        token,
+        user.id,
+        transaction
+      );
+
+      // Generate auth token
+      const authToken = user.generateAuthToken();
+
+      await transaction.commit();
+
+      return {
+        user: user.toJSON(),
+        workspace,
+        token: authToken,
+      };
+    } catch (error) {
+      // only rollback if transaction not finished (avoid rollback-after-commit error)
+      if (transaction && !transaction.finished) {
+        try {
+          await transaction.rollback();
+        } catch (_) {
+          // swallow rollback errors
+        }
+      }
       throw error;
     }
   }

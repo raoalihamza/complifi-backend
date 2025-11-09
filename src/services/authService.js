@@ -4,55 +4,6 @@ const { HTTP_STATUS, ERROR_MESSAGES } = require("../config/constants");
 
 class AuthService {
   /**
-   * Register new user with OTP email
-   */
-  async register(userData) {
-    try {
-      // Check if user already exists
-      const existingUser = await userRepository.findByEmail(userData.email);
-
-      if (existingUser) {
-        const error = new Error("Email already registered");
-        error.statusCode = HTTP_STATUS.CONFLICT;
-        throw error;
-      }
-
-      // Create user (password will be hashed by model hook)
-      const user = await userRepository.create({
-        ...userData,
-        isEmailVerified: false,
-        hasCompletedOnboarding: false,
-      });
-
-      // Generate OTP for email verification
-      const otp = user.generateEmailVerificationOTP();
-      await user.save();
-
-      // Send verification email
-      try {
-        await emailService.sendOTPVerificationEmail(user.email, user.name, otp);
-      } catch (emailError) {
-        console.error("Email sending failed:", emailError);
-      }
-
-      // Generate JWT token (but user can't access protected routes until verified)
-      const token = user.generateAuthToken();
-
-      // Return user without password
-      const userResponse = user.toJSON();
-
-      return {
-        user: userResponse,
-        token, // Token provided but email verification required
-        message:
-          "Registration successful! Please check your email for verification code.",
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /**
    * Verify email with OTP
    */
   async verifyEmail(email, otp) {

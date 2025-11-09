@@ -27,7 +27,7 @@ class FolderRepository {
           {
             model: Workspace,
             as: "workspace",
-            attributes: ["id", "name", "ownerId"],
+            attributes: ["id", "name", "createdBy"],
           },
           {
             model: User,

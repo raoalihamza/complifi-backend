@@ -143,34 +143,38 @@ class WorkspaceController {
    * Invite member to workspace
    * POST /api/v1/workspaces/:id/members
    */
-  async inviteMember(req, res) {
-    try {
-      const { id } = req.params;
-      const { email, role } = req.body;
-      const inviterId = req.user.id;
+  // async inviteMember(req, res) {
+  //   try {
+  //     console.log("req params", req.params);
+  //     console.log("req body", req.body);
+  //     console.log("req user", req.user);
 
-      const member = await workspaceService.inviteMember(
-        id,
-        inviterId,
-        email,
-        role
-      );
+  //     const { id } = req.params;
+  //     const { email, role } = req.body;
+  //     const inviterId = req.user.id;
 
-      return successResponse(
-        res,
-        "Member invited successfully",
-        member,
-        HTTP_STATUS.CREATED
-      );
-    } catch (error) {
-      return errorResponse(
-        res,
-        error.message,
-        error,
-        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
+  //     const member = await workspaceService.inviteMember(
+  //       id,
+  //       inviterId,
+  //       email,
+  //       role
+  //     );
+
+  //     return successResponse(
+  //       res,
+  //       "Member invited successfully",
+  //       member,
+  //       HTTP_STATUS.CREATED
+  //     );
+  //   } catch (error) {
+  //     return errorResponse(
+  //       res,
+  //       error.message,
+  //       error,
+  //       error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+  //     );
+  //   }
+  // }
 
   /**
    * Get workspace members
@@ -286,6 +290,62 @@ class WorkspaceController {
         error,
         error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
       );
+    }
+  }
+
+  /**
+   * Invite member to workspace
+   */
+  async inviteMember(req, res) {
+    try {
+      console.log("req params", req.params);
+      console.log("req body", req.body);
+      console.log("req user", req.user);
+      const { id: workspaceId } = req.params;
+      const userId = req.user.id;
+      const invitationData = req.body;
+
+      const result = await workspaceService.inviteMember(
+        userId,
+        parseInt(workspaceId),
+        invitationData
+      );
+
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: result.message,
+        data: {
+          email: result.email,
+          role: result.role,
+        },
+      });
+    } catch (error) {
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
+   * Accept workspace invitation
+   */
+  async acceptInvitation(req, res) {
+    try {
+      const { token, userData } = req.body;
+
+      const result = await workspaceService.acceptInvitation(token, userData);
+
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: "Invitation accepted successfully",
+        data: result,
+      });
+    } catch (error) {
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: error.message,
+      });
     }
   }
 }

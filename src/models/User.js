@@ -43,21 +43,11 @@ module.exports = (sequelize, DataTypes) => {
           },
         },
       },
-      role: {
-        type: DataTypes.ENUM(
-          USER_ROLES.ADMIN,
-          USER_ROLES.AUDIT_PARTNER,
-          USER_ROLES.SME_USER,
-          USER_ROLES.VIEWER
-        ),
+      isSuperAdmin: {
+        type: DataTypes.BOOLEAN,
         allowNull: false,
-        defaultValue: USER_ROLES.SME_USER,
-        validate: {
-          isIn: {
-            args: [Object.values(USER_ROLES)],
-            msg: "Invalid role",
-          },
-        },
+        defaultValue: false,
+        field: "is_super_admin",
       },
       // Email Verification Fields
       isEmailVerified: {
@@ -137,6 +127,9 @@ module.exports = (sequelize, DataTypes) => {
         {
           fields: ["has_completed_onboarding"],
         },
+        {
+          fields: ["is_super_admin"],
+        },
       ],
       hooks: {
         // Hash password before creating user
@@ -165,7 +158,7 @@ module.exports = (sequelize, DataTypes) => {
   // Instance method to generate JWT token
   User.prototype.generateAuthToken = function () {
     return jwt.sign(
-      { id: this.id, email: this.email, role: this.role },
+      { id: this.id, email: this.email, isSuperAdmin: this.isSuperAdmin }, // ✅ Add isSuperAdmin
       envConfig.jwt.secret,
       { expiresIn: envConfig.jwt.expire }
     );

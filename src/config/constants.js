@@ -9,7 +9,6 @@ module.exports = {
 
   // Workspace Member Roles
   WORKSPACE_ROLES: {
-    ADMIN: "admin",
     EDITOR: "editor",
     VIEWER: "viewer",
   },

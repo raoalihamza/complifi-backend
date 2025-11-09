@@ -11,10 +11,14 @@ module.exports = {
         allowNull: false,
       },
       name: {
-        type: Sequelize.STRING,
+        type: Sequelize.STRING(100),
         allowNull: false,
       },
-      owner_id: {
+      description: {
+        type: Sequelize.TEXT,
+        allowNull: true,
+      },
+      created_by: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
@@ -22,7 +26,12 @@ module.exports = {
           key: "id",
         },
         onUpdate: "CASCADE",
-        onDelete: "CASCADE",
+        onDelete: "RESTRICT",
+      },
+      is_active: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
       },
       created_at: {
         type: Sequelize.DATE,
@@ -37,14 +46,8 @@ module.exports = {
     });
 
     // Add index on owner_id for faster lookups
-    await queryInterface.addIndex("workspaces", ["owner_id"], {
-      name: "workspaces_owner_id_idx",
-    });
-
-    // Add index on created_at for sorting
-    await queryInterface.addIndex("workspaces", ["created_at"], {
-      name: "workspaces_created_at_idx",
-    });
+    await queryInterface.addIndex("workspaces", ["created_by"]);
+    await queryInterface.addIndex("workspaces", ["is_active"]);
   },
 
   async down(queryInterface, Sequelize) {

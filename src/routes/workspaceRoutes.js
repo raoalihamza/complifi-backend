@@ -12,9 +12,11 @@ const {
   updateWorkspaceSchema,
   inviteMemberSchema,
   updateMemberRoleSchema,
+  acceptInvitationSchema,
 } = require("../validations/workspaceValidation");
 const folderController = require("../controllers/folderController");
 const { createFolderSchema } = require("../validations/foldervalidation");
+const checkSuperAdmin = require("../middlewares/checkSuperAdmin");
 
 /**
  * All workspace routes require authentication
@@ -71,15 +73,28 @@ router.get(
   workspaceController.getWorkspaceMembers
 );
 
-// Invite member to workspace
-// POST /api/v1/workspaces/:id/members
+/**
+ * @route   POST /api/v1/workspaces/:id/invite
+ * @desc    Invite member (Super Admin only)
+ * @access  Private (Super Admin)
+ */
 router.post(
-  "/:id/members",
+  "/:id/invite",
   protect,
-  checkWorkspaceAccess,
-  checkWorkspaceRole("owner", "admin"),
+  checkSuperAdmin,
   validate(inviteMemberSchema),
   workspaceController.inviteMember
+);
+
+/**
+ * @route   POST /api/v1/workspaces/accept-invitation
+ * @desc    Accept workspace invitation
+ * @access  Public
+ */
+router.post(
+  "/accept-invitation",
+  validate(acceptInvitationSchema),
+  workspaceController.acceptInvitation
 );
 
 // Remove member from workspace
