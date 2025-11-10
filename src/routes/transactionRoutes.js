@@ -8,6 +8,19 @@ const uploadMiddleware = require("../middlewares/uploadMiddleware");
 router.use(protect);
 
 /**
+ * @route   POST /reconciliation/create
+ * @desc    Create reconciliation folder by uploading statement
+ * @access  Private
+ * @body    { statementType: 'BANK' | 'CARD', workspaceId: number }
+ * @file    statement file (PDF, CSV, XLSX)
+ */
+router.post(
+  "/reconciliation/create",
+  uploadMiddleware.single("statement"),
+  transactionController.createReconciliationFolder
+);
+
+/**
  * @route   POST /folders/:folderId/statements
  * @desc    Upload and process bank statement
  * @access  Private

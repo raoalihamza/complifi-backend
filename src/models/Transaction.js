@@ -33,8 +33,14 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
       },
       status: {
-        type: DataTypes.ENUM("MATCHED", "EXCEPTION", "PENDING"),
-        defaultValue: "PENDING",
+        type: DataTypes.ENUM("MATCHED", "EXCEPTION", "FEE", "PENDING"),
+        defaultValue: "EXCEPTION",
+        validate: {
+          isIn: {
+            args: [["MATCHED", "EXCEPTION", "FEE", "PENDING"]],
+            msg: "Invalid transaction status",
+          },
+        },
       },
       flagged: {
         type: DataTypes.BOOLEAN,

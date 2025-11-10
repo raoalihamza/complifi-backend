@@ -14,7 +14,7 @@ router.use(protect);
  */
 router.post(
   "/folders/:folderId/receipts",
-  uploadMiddleware.array("receipts", 10), // Max 10 receipts at once
+  uploadMiddleware.array("receipts", 5), // Max 5 receipts at once
   receiptController.uploadReceipts
 );
 

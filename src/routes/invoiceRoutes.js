@@ -14,7 +14,7 @@ router.use(protect);
  */
 router.post(
   "/folders/:folderId/invoices",
-  uploadMiddleware.array("invoices", 10), // Max 10 invoices at once
+  uploadMiddleware.array("invoices", 5), // Max 5 invoices at once
   invoiceController.uploadInvoices
 );
 

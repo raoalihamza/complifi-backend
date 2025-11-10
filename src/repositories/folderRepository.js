@@ -77,6 +77,10 @@ class FolderRepository {
         where.type = filters.type;
       }
 
+      if (filters.statementType) {
+        where.statementType = filters.statementType;
+      }
+
       if (filters.search) {
         where.name = {
           [Op.iLike]: `%${filters.search}%`,

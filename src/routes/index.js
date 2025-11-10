@@ -14,8 +14,8 @@ router.use("/auth", authRoutes);
 router.use("/workspaces", workspaceRoutes);
 router.use("/folders", folderRoutes);
 router.use("/transactions", transactionRoutes);
-router.use("/receipts", receiptRoutes);
-router.use("/invoices", invoiceRoutes);
+router.use("/transactions", receiptRoutes);
+router.use("/transactions", invoiceRoutes);
 
 // Health check for API
 router.get("/", (req, res) => {

@@ -1,7 +1,10 @@
 const transactionRepository = require("../repositories/transactionRepository");
 const folderRepository = require("../repositories/folderRepository");
+const folderAnalyticsRepository = require("../repositories/folderAnalyticsRepository");
 const ocrService = require("../services/ocrService");
+const folderService = require("../services/folderService");
 const fileHelper = require("../helpers/fileHelper");
+const { TRANSACTION_STATUS } = require("../config/constants");
 
 class TransactionController {
   /**
@@ -170,13 +173,43 @@ class TransactionController {
       );
       const statistics = await transactionRepository.getStatistics(folderId);
 
+      // Fetch analytics data for the folder
+      const analytics = await folderAnalyticsRepository.findByFolderId(folderId);
+
+      const responseData = {
+        transactions,
+        statistics,
+        filters: filters,
+      };
+
+      // Include analytics if available (for reconciliation folders)
+      if (analytics) {
+        responseData.analytics = {
+          currency: analytics.currency,
+          totalFees: parseFloat(analytics.totalFees || 0),
+          totalSpend: parseFloat(analytics.totalSpend || 0),
+          interestPaidAmount: analytics.interestPaidAmount ? parseFloat(analytics.interestPaidAmount) : null,
+          monthlyInterestRatePercent: analytics.monthlyInterestRatePercent ? parseFloat(analytics.monthlyInterestRatePercent) : null,
+          aprPercentNominal: analytics.aprPercentNominal ? parseFloat(analytics.aprPercentNominal) : null,
+          averageDailyBalance: analytics.averageDailyBalance ? parseFloat(analytics.averageDailyBalance) : null,
+          openingBalance: analytics.openingBalance ? parseFloat(analytics.openingBalance) : null,
+          closingBalance: analytics.closingBalance ? parseFloat(analytics.closingBalance) : null,
+          subscriptions: analytics.subscriptions,
+          duplicates: analytics.duplicates,
+          feeByCategory: analytics.feeByCategory,
+          topFeeMerchants: analytics.topFeeMerchants,
+          feesOverTime: analytics.feesOverTime,
+          hiddenFees: analytics.hiddenFees,
+          flaggedTransactions: analytics.flaggedTransactions,
+          tips: analytics.tips,
+          cardSuggestions: analytics.cardSuggestions,
+          additionalData: analytics.additionalData,
+        };
+      }
+
       res.status(200).json({
         success: true,
-        data: {
-          transactions,
-          statistics,
-          filters: filters,
-        },
+        data: responseData,
       });
     } catch (error) {
       console.error("Get Transactions Error:", error);
@@ -342,6 +375,222 @@ class TransactionController {
       res.status(500).json({
         success: false,
         message: "Failed to delete transaction",
+      });
+    }
+  }
+
+  /**
+   * Create reconciliation folder by uploading statement
+   * POST /api/v1/reconciliation/create
+   * Body: { statementType: 'BANK' | 'CARD', workspaceId: number }
+   * File: statement file (PDF, CSV, XLSX)
+   */
+  async createReconciliationFolder(req, res) {
+    try {
+      const { statementType, workspaceId } = req.body;
+      const userId = req.user.id;
+
+      // Validate required fields
+      if (!statementType || !workspaceId) {
+        if (req.file) fileHelper.deleteFile(req.file.path);
+        return res.status(400).json({
+          success: false,
+          message: "Statement type and workspace ID are required",
+        });
+      }
+
+      // Validate statement type
+      if (!["BANK", "CARD"].includes(statementType)) {
+        if (req.file) fileHelper.deleteFile(req.file.path);
+        return res.status(400).json({
+          success: false,
+          message: "Statement type must be either 'BANK' or 'CARD'",
+        });
+      }
+
+      // Validate file upload
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "No statement file uploaded",
+        });
+      }
+
+      // Process statement with OCR
+      const ocrData = await ocrService.processStatement(req.file.path);
+
+      // Generate folder name based on OCR data
+      // Try to extract date from statement
+      let folderName = `${statementType} Statement`;
+      if (ocrData.statement_period_start || ocrData.statement_period_end) {
+        const date = new Date(
+          ocrData.statement_period_end || ocrData.statement_period_start
+        );
+        const monthYear = date.toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        });
+        folderName = `${monthYear} - ${statementType === "BANK" ? "Bank" : "Card"} Data`;
+      }
+
+      // Create reconciliation folder
+      const folder = await folderService.createReconciliationFolder(
+        userId,
+        parseInt(workspaceId),
+        statementType,
+        folderName,
+        `/uploads/statements/${req.file.filename}`
+      );
+
+      // Classify transactions: FEE vs EXCEPTION
+      const transactionsData = ocrData.transactions.map((transaction) => {
+        // Check if this is a fee transaction
+        const isFee =
+          transaction.category &&
+          (transaction.category.toLowerCase().includes("fee") ||
+            transaction.category.toLowerCase().includes("charge") ||
+            transaction.category.toLowerCase().includes("interest"));
+
+        return {
+          folderId: folder.id,
+          merchantName: transaction.merchant || transaction.description,
+          date: new Date(transaction.date),
+          value: parseFloat(transaction.amount),
+          category: transaction.category || null,
+          status: isFee ? TRANSACTION_STATUS.FEE : TRANSACTION_STATUS.EXCEPTION,
+          flagged:
+            transaction.flags && transaction.flags.length > 0 ? true : false,
+          notes: transaction.flags
+            ? JSON.stringify(transaction.flags)
+            : null,
+        };
+      });
+
+      // Create transactions
+      const createdTransactions = await transactionRepository.bulkCreate(
+        transactionsData
+      );
+
+      // Count FEE transactions
+      const feeTransactions = createdTransactions.filter(
+        (t) => t.status === TRANSACTION_STATUS.FEE
+      );
+      const exceptionTransactions = createdTransactions.filter(
+        (t) => t.status === TRANSACTION_STATUS.EXCEPTION
+      );
+
+      // Save OCR analytics to database
+      const analyticsData = {
+        folderId: folder.id,
+        currency: ocrData.currency || null,
+        totalFees: ocrData.totalFees || 0,
+        totalSpend: ocrData.totalSpend || 0,
+        interestPaidAmount: ocrData.interest_paid_amount || null,
+        monthlyInterestRatePercent: ocrData.monthly_interest_rate_percent || null,
+        aprPercentNominal: ocrData.apr_percent_nominal || null,
+        averageDailyBalance: ocrData.average_daily_balance || null,
+        openingBalance: ocrData.opening_balance || null,
+        closingBalance: ocrData.closing_balance || null,
+        subscriptions: ocrData.subscriptions || [],
+        duplicates: ocrData.duplicates || [],
+        feeByCategory: ocrData.feeByCategory || {},
+        topFeeMerchants: ocrData.topFeeMerchants || {},
+        feesOverTime: ocrData.feesOverTime || {},
+        hiddenFees: ocrData.hiddenFees || [],
+        flaggedTransactions: ocrData.flagged || [],
+        tips: ocrData.tips || [],
+        cardSuggestions: ocrData.cardSuggestions || [],
+      };
+
+      // Handle any additional dynamic fields from OCR
+      const standardFields = [
+        "transactions",
+        "currency",
+        "totalFees",
+        "totalSpend",
+        "subscriptions",
+        "duplicates",
+        "feeByCategory",
+        "topFeeMerchants",
+        "feesOverTime",
+        "tips",
+        "cardSuggestions",
+        "hiddenFees",
+        "flagged",
+        "interest_paid_amount",
+        "monthly_interest_rate_percent",
+        "apr_percent_nominal",
+        "total_transactions",
+        "average_daily_balance",
+        "opening_balance",
+        "closing_balance",
+      ];
+
+      const additionalFields = {};
+      Object.keys(ocrData).forEach((key) => {
+        if (!standardFields.includes(key)) {
+          additionalFields[key] = ocrData[key];
+        }
+      });
+
+      if (Object.keys(additionalFields).length > 0) {
+        analyticsData.additionalData = additionalFields;
+      }
+
+      await folderAnalyticsRepository.create(analyticsData);
+
+      // Prepare comprehensive response
+      const responseData = {
+        folder: folder,
+        totalTransactions: createdTransactions.length,
+        feeTransactions: feeTransactions.length,
+        exceptionTransactions: exceptionTransactions.length,
+        transactions: createdTransactions,
+        fileInfo: {
+          filename: req.file.originalname,
+          size: `${(req.file.size / (1024 * 1024)).toFixed(2)} MB`,
+          uploadedAt: new Date().toISOString(),
+        },
+        // Include all analytics from OCR
+        analytics: {
+          currency: ocrData.currency || null,
+          totalFees: ocrData.totalFees || 0,
+          totalSpend: ocrData.totalSpend || 0,
+          subscriptions: ocrData.subscriptions || [],
+          duplicates: ocrData.duplicates || [],
+          feeByCategory: ocrData.feeByCategory || {},
+          topFeeMerchants: ocrData.topFeeMerchants || {},
+          feesOverTime: ocrData.feesOverTime || {},
+          hiddenFees: ocrData.hiddenFees || [],
+          flagged: ocrData.flagged || [],
+          interestPaidAmount: ocrData.interest_paid_amount || 0,
+          monthlyInterestRatePercent:
+            ocrData.monthly_interest_rate_percent || null,
+          aprPercentNominal: ocrData.apr_percent_nominal || null,
+          averageDailyBalance: ocrData.average_daily_balance || null,
+          openingBalance: ocrData.opening_balance || null,
+          closingBalance: ocrData.closing_balance || null,
+        },
+        tips: ocrData.tips || [],
+        cardSuggestions: ocrData.cardSuggestions || [],
+      };
+
+      res.status(201).json({
+        success: true,
+        message: "Reconciliation folder created successfully",
+        data: responseData,
+      });
+    } catch (error) {
+      console.error("Create Reconciliation Folder Error:", error);
+
+      // Clean up uploaded file on error
+      if (req.file) {
+        fileHelper.deleteFile(req.file.path);
+      }
+
+      res.status(500).json({
+        success: false,
+        message: error.message || "Failed to create reconciliation folder",
       });
     }
   }

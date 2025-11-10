@@ -7,6 +7,7 @@ const uploadDirs = {
   statements: path.join(__dirname, "../../uploads/statements"),
   receipts: path.join(__dirname, "../../uploads/receipts"),
   invoices: path.join(__dirname, "../../uploads/invoices"),
+  generalFiles: path.join(__dirname, "../../uploads/general-files"),
 };
 
 // Create directories if they don't exist
@@ -34,6 +35,11 @@ const storage = multer.diskStorage({
       req.path.includes("/statements")
     ) {
       uploadPath = uploadDirs.statements;
+    } else if (
+      file.fieldname === "files" ||
+      req.path.includes("/files")
+    ) {
+      uploadPath = uploadDirs.generalFiles;
     }
 
     cb(null, uploadPath);
@@ -53,6 +59,7 @@ const fileFilter = (req, file, cb) => {
     statements: [".pdf", ".csv", ".xlsx", ".xls"],
     receipts: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
     invoices: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+    generalFiles: [".pdf", ".csv", ".xlsx", ".xls", ".jpg", ".jpeg", ".png", ".webp"],
   };
 
   const ext = path.extname(file.originalname).toLowerCase();
@@ -65,6 +72,8 @@ const fileFilter = (req, file, cb) => {
     isValid = allowedTypes.receipts.includes(ext);
   } else if (file.fieldname === "invoices" || req.path.includes("/invoices")) {
     isValid = allowedTypes.invoices.includes(ext);
+  } else if (file.fieldname === "files" || req.path.includes("/files")) {
+    isValid = allowedTypes.generalFiles.includes(ext);
   }
 
   if (isValid) {
@@ -102,7 +111,7 @@ const handleMulterError = (err, req, res, next) => {
     if (err.code === "LIMIT_FILE_COUNT") {
       return res.status(400).json({
         success: false,
-        message: "Too many files. Maximum is 10 files at once.",
+        message: "Too many files. Please check the maximum file limit for this upload.",
       });
     }
     return res.status(400).json({

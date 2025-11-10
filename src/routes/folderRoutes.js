@@ -12,6 +12,10 @@ const {
   assignFolderSchema,
 } = require("../validations/foldervalidation");
 
+// Create general folder (empty folder)
+// POST /api/v1/folders/general
+router.post("/general", protect, folderController.createGeneralFolder);
+
 // Direct folder routes (by ID)
 // GET /api/v1/folders/:id
 router.get("/:id", protect, folderController.getFolderById);
@@ -50,5 +54,13 @@ router.patch(
   validate(updatePrioritySchema),
   folderController.updatePriority
 );
+
+// POST /api/v1/folders/:id/copy
+// Copy reconciliation folder to a general folder
+router.post("/:id/copy", protect, folderController.copyFolderToGeneral);
+
+// GET /api/v1/folders/:id/children
+// Get child folders of a general folder
+router.get("/:id/children", protect, folderController.getChildFolders);
 
 module.exports = router;

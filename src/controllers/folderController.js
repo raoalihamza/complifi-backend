@@ -56,6 +56,7 @@ class FolderController {
           ? parseInt(req.query.assignedToId)
           : undefined,
         type: req.query.type,
+        statementType: req.query.statementType,
         search: req.query.search,
       };
 
@@ -284,6 +285,7 @@ class FolderController {
           ? parseInt(req.query.assignedToId)
           : undefined,
         type: req.query.type,
+        statementType: req.query.statementType,
       };
 
       const jobBoard = await folderService.getJobBoard(
@@ -296,6 +298,117 @@ class FolderController {
         res,
         "Job board fetched successfully",
         jobBoard,
+        HTTP_STATUS.OK
+      );
+    } catch (error) {
+      return errorResponse(
+        res,
+        error.message,
+        error,
+        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Create general folder (empty folder for organization)
+   * POST /api/v1/folders/general
+   */
+  async createGeneralFolder(req, res) {
+    try {
+      const { name, workspaceId } = req.body;
+      const userId = req.user.id;
+
+      if (!name || !workspaceId) {
+        return errorResponse(
+          res,
+          "Folder name and workspace ID are required",
+          null,
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+      const folder = await folderService.createGeneralFolder(
+        userId,
+        parseInt(workspaceId),
+        name
+      );
+
+      return successResponse(
+        res,
+        "General folder created successfully",
+        folder,
+        HTTP_STATUS.CREATED
+      );
+    } catch (error) {
+      return errorResponse(
+        res,
+        error.message,
+        error,
+        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Copy reconciliation folder to general folder
+   * POST /api/v1/folders/:id/copy
+   */
+  async copyFolderToGeneral(req, res) {
+    try {
+      const { id } = req.params;
+      const { targetGeneralFolderId } = req.body;
+      const userId = req.user.id;
+
+      if (!targetGeneralFolderId) {
+        return errorResponse(
+          res,
+          "Target general folder ID is required",
+          null,
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+      const folder = await folderService.copyFolderToGeneral(
+        userId,
+        parseInt(id),
+        parseInt(targetGeneralFolderId)
+      );
+
+      return successResponse(
+        res,
+        "Folder copied to general folder successfully",
+        folder,
+        HTTP_STATUS.OK
+      );
+    } catch (error) {
+      return errorResponse(
+        res,
+        error.message,
+        error,
+        error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Get child folders of a general folder
+   * GET /api/v1/folders/:id/children
+   */
+  async getChildFolders(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      const childFolders = await folderService.getChildFolders(
+        userId,
+        parseInt(id)
+      );
+
+      return successResponse(
+        res,
+        "Child folders fetched successfully",
+        childFolders,
         HTTP_STATUS.OK
       );
     } catch (error) {

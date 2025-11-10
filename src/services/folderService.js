@@ -1,7 +1,12 @@
 const folderRepository = require("../repositories/folderRepository");
 const workspaceRepository = require("../repositories/workspaceRepository");
 const userRepository = require("../repositories/userRepository");
-const { HTTP_STATUS, WORKSPACE_ROLES } = require("../config/constants");
+const {
+  HTTP_STATUS,
+  WORKSPACE_ROLES,
+  FOLDER_TYPES,
+  FOLDER_STATUS
+} = require("../config/constants");
 
 class FolderService {
   /**
@@ -169,19 +174,11 @@ class FolderService {
 
   /**
    * Delete folder
-   * Only SUPER_ADMIN can delete folders
+   * RECONCILIATION folders: Only SUPER_ADMIN can delete
+   * GENERAL folders: Creator or SUPER_ADMIN can delete
    */
   async deleteFolder(userId, folderId) {
     try {
-      // Verify user is Super Admin
-      const user = await userRepository.findById(userId);
-
-      if (!user || !user.isSuperAdmin) {
-        const error = new Error("Only company owner can delete folders");
-        error.statusCode = HTTP_STATUS.FORBIDDEN;
-        throw error;
-      }
-
       // Get folder
       const folder = await folderRepository.findById(folderId);
 
@@ -191,8 +188,31 @@ class FolderService {
         throw error;
       }
 
-      // TODO Phase 4: Check if folder has associated data
-      // For now, allow delete (cascade will handle relations)
+      // Verify user is Super Admin
+      const user = await userRepository.findById(userId);
+      const isSuperAdmin = user && user.isSuperAdmin;
+
+      // Permission check based on folder type
+      if (folder.type === FOLDER_TYPES.RECONCILIATION) {
+        // Only SUPER_ADMIN can delete reconciliation folders
+        if (!isSuperAdmin) {
+          const error = new Error(
+            "Only company owner can delete reconciliation folders"
+          );
+          error.statusCode = HTTP_STATUS.FORBIDDEN;
+          throw error;
+        }
+      } else if (folder.type === FOLDER_TYPES.GENERAL) {
+        // Creator or SUPER_ADMIN can delete general folders
+        const isCreator = folder.createdBy === userId;
+        if (!isSuperAdmin && !isCreator) {
+          const error = new Error(
+            "Only the folder creator or company owner can delete general folders"
+          );
+          error.statusCode = HTTP_STATUS.FORBIDDEN;
+          throw error;
+        }
+      }
 
       await folderRepository.delete(folderId);
 
@@ -205,6 +225,7 @@ class FolderService {
   /**
    * Assign folder to user
    * SUPER_ADMIN and EDITOR can assign folders
+   * Only RECONCILIATION folders can be assigned
    */
   async assignFolder(userId, folderId, assigneeId) {
     try {
@@ -214,6 +235,13 @@ class FolderService {
       if (!folder) {
         const error = new Error("Folder not found");
         error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      // Only reconciliation folders can be assigned
+      if (folder.type !== FOLDER_TYPES.RECONCILIATION) {
+        const error = new Error("Only reconciliation folders can be assigned");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
         throw error;
       }
 
@@ -248,6 +276,18 @@ class FolderService {
         throw error;
       }
 
+      // Verify assignee is not a viewer
+      const assigneeRole = await workspaceRepository.getMemberRole(
+        folder.workspaceId,
+        assigneeId
+      );
+
+      if (assigneeRole === WORKSPACE_ROLES.VIEWER) {
+        const error = new Error("Cannot assign folders to viewers");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
       // Assign folder
       await folderRepository.updateAssignee(folderId, assigneeId);
       return await folderRepository.findById(folderId, true);
@@ -258,6 +298,8 @@ class FolderService {
 
   /**
    * Update folder status
+   * Only RECONCILIATION folders have statuses
+   * SUPER_ADMIN and EDITOR can update status
    */
   async updateFolderStatus(userId, folderId, newStatus) {
     try {
@@ -270,22 +312,36 @@ class FolderService {
         throw error;
       }
 
-      // Verify user has access
-      const hasAccess = await workspaceRepository.isMember(
+      // Only reconciliation folders have statuses
+      if (folder.type !== FOLDER_TYPES.RECONCILIATION) {
+        const error = new Error(
+          "Only reconciliation folders can have status changes"
+        );
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      // Check if user is SUPER_ADMIN
+      const user = await userRepository.findById(userId);
+      const isSuperAdmin = user && user.isSuperAdmin;
+
+      // Get user's workspace role
+      const userRole = await workspaceRepository.getMemberRole(
         folder.workspaceId,
         userId
       );
 
-      if (!hasAccess) {
-        const error = new Error("Access denied to this folder");
+      // Only SUPER_ADMIN or EDITOR can update status
+      if (!isSuperAdmin && userRole !== WORKSPACE_ROLES.EDITOR) {
+        const error = new Error(
+          "Only company owner or editor can update folder status"
+        );
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
       }
 
       // Update status
       await folderRepository.updateStatus(folderId, newStatus);
-
-      // TODO Phase 6: Log status change activity
 
       return await folderRepository.findById(folderId, true);
     } catch (error) {
@@ -295,6 +351,7 @@ class FolderService {
 
   /**
    * Update folder priority
+   * SUPER_ADMIN and EDITOR can update priority
    */
   async updateFolderPriority(userId, folderId, newPriority) {
     try {
@@ -307,14 +364,21 @@ class FolderService {
         throw error;
       }
 
-      // Verify user has access
-      const hasAccess = await workspaceRepository.isMember(
+      // Check if user is SUPER_ADMIN
+      const user = await userRepository.findById(userId);
+      const isSuperAdmin = user && user.isSuperAdmin;
+
+      // Get user's workspace role
+      const userRole = await workspaceRepository.getMemberRole(
         folder.workspaceId,
         userId
       );
 
-      if (!hasAccess) {
-        const error = new Error("Access denied to this folder");
+      // Only SUPER_ADMIN or EDITOR can update priority
+      if (!isSuperAdmin && userRole !== WORKSPACE_ROLES.EDITOR) {
+        const error = new Error(
+          "Only company owner or editor can update folder priority"
+        );
         error.statusCode = HTTP_STATUS.FORBIDDEN;
         throw error;
       }
@@ -330,6 +394,7 @@ class FolderService {
 
   /**
    * Get Job Board (folders grouped by status for Kanban view)
+   * Only shows RECONCILIATION folders
    */
   async getJobBoard(userId, workspaceId, filters = {}) {
     try {
@@ -342,10 +407,10 @@ class FolderService {
         throw error;
       }
 
-      // Get all folders without pagination
+      // Get all RECONCILIATION folders only
       const allFolders = await folderRepository.findByWorkspaceId(
         workspaceId,
-        filters,
+        { ...filters, type: FOLDER_TYPES.RECONCILIATION },
         { page: 1, limit: 1000 } // Get all folders
       );
 
@@ -383,6 +448,193 @@ class FolderService {
       throw error;
     }
   }
+
+  /**
+   * Create a General Folder (empty folder for organization)
+   * SUPER_ADMIN and EDITOR can create general folders
+   */
+  async createGeneralFolder(userId, workspaceId, folderName) {
+    try {
+      // Verify user has access to workspace
+      const hasAccess = await workspaceRepository.isMember(workspaceId, userId);
+
+      if (!hasAccess) {
+        const error = new Error("Access denied to this workspace");
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
+      // Check if user is SUPER_ADMIN
+      const user = await userRepository.findById(userId);
+      const isSuperAdmin = user && user.isSuperAdmin;
+
+      // Get user's workspace role
+      const userRole = await workspaceRepository.getMemberRole(
+        workspaceId,
+        userId
+      );
+
+      // Only SUPER_ADMIN or EDITOR can create folders
+      if (!isSuperAdmin && userRole !== WORKSPACE_ROLES.EDITOR) {
+        const error = new Error(
+          "Only company owner or editor can create folders"
+        );
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
+      // Create general folder
+      const folder = await folderRepository.create({
+        name: folderName,
+        workspaceId,
+        type: FOLDER_TYPES.GENERAL,
+        createdBy: userId,
+        status: FOLDER_STATUS.TO_DO,
+        complianceScore: 0,
+      });
+
+      return await folderRepository.findById(folder.id, true);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Create a Reconciliation Folder (after statement upload)
+   * Called internally from transaction controller
+   */
+  async createReconciliationFolder(
+    userId,
+    workspaceId,
+    statementType,
+    folderName,
+    statementFileUrl
+  ) {
+    try {
+      // Create reconciliation folder
+      const folder = await folderRepository.create({
+        name: folderName,
+        workspaceId,
+        type: FOLDER_TYPES.RECONCILIATION,
+        statementType,
+        statementFileUrl,
+        createdBy: userId,
+        status: FOLDER_STATUS.TO_DO,
+        complianceScore: 0,
+      });
+
+      return await folderRepository.findById(folder.id, true);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Copy reconciliation folder to a general folder
+   */
+  async copyFolderToGeneral(userId, folderId, targetGeneralFolderId) {
+    try {
+      // Get source folder
+      const sourceFolder = await folderRepository.findById(folderId);
+
+      if (!sourceFolder) {
+        const error = new Error("Source folder not found");
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      // Verify source is a reconciliation folder
+      if (sourceFolder.type !== FOLDER_TYPES.RECONCILIATION) {
+        const error = new Error("Can only copy reconciliation folders");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      // Get target folder
+      const targetFolder = await folderRepository.findById(targetGeneralFolderId);
+
+      if (!targetFolder) {
+        const error = new Error("Target folder not found");
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      // Verify target is a general folder
+      if (targetFolder.type !== FOLDER_TYPES.GENERAL) {
+        const error = new Error("Target must be a general folder");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      // Verify both folders are in same workspace
+      if (sourceFolder.workspaceId !== targetFolder.workspaceId) {
+        const error = new Error("Folders must be in the same workspace");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      // Verify user has access
+      const hasAccess = await workspaceRepository.isMember(
+        sourceFolder.workspaceId,
+        userId
+      );
+
+      if (!hasAccess) {
+        const error = new Error("Access denied");
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
+      // Update source folder to have parent
+      await folderRepository.update(folderId, {
+        parentFolderId: targetGeneralFolderId,
+      });
+
+      return await folderRepository.findById(folderId, true);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get child folders of a general folder
+   */
+  async getChildFolders(userId, parentFolderId) {
+    try {
+      // Get parent folder
+      const parentFolder = await folderRepository.findById(parentFolderId);
+
+      if (!parentFolder) {
+        const error = new Error("Folder not found");
+        error.statusCode = HTTP_STATUS.NOT_FOUND;
+        throw error;
+      }
+
+      // Verify user has access
+      const hasAccess = await workspaceRepository.isMember(
+        parentFolder.workspaceId,
+        userId
+      );
+
+      if (!hasAccess) {
+        const error = new Error("Access denied");
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
+      // Get child folders
+      const childFolders = await folderRepository.findByWorkspaceId(
+        parentFolder.workspaceId,
+        { parentFolderId: parentFolderId },
+        { page: 1, limit: 1000 }
+      );
+
+      return childFolders;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
+
 
 module.exports = new FolderService();

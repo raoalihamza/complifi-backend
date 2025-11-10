@@ -2,6 +2,7 @@ const {
   FOLDER_TYPES,
   FOLDER_STATUS,
   PRIORITY,
+  STATEMENT_TYPES,
 } = require("../config/constants");
 
 module.exports = (sequelize, DataTypes) => {
@@ -109,6 +110,80 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         field: "closing_date",
       },
+      statementType: {
+        type: DataTypes.ENUM(STATEMENT_TYPES.BANK, STATEMENT_TYPES.CARD),
+        allowNull: true,
+        field: "statement_type",
+        validate: {
+          isIn: {
+            args: [[STATEMENT_TYPES.BANK, STATEMENT_TYPES.CARD]],
+            msg: "Invalid statement type. Must be 'BANK' or 'CARD'",
+          },
+          customValidator(value) {
+            if (this.type === FOLDER_TYPES.RECONCILIATION && !value) {
+              throw new Error("Statement type is required for reconciliation folders");
+            }
+            if (this.type === FOLDER_TYPES.GENERAL && value) {
+              throw new Error("General folders cannot have a statement type");
+            }
+          },
+        },
+      },
+      parentFolderId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        field: "parent_folder_id",
+        references: {
+          model: "folders",
+          key: "id",
+        },
+        onDelete: "CASCADE",
+        validate: {
+          async customValidator(value) {
+            if (value) {
+              // Check if parent folder is a GENERAL folder
+              const parentFolder = await this.constructor.findByPk(value);
+              if (!parentFolder) {
+                throw new Error("Parent folder does not exist");
+              }
+              if (parentFolder.type !== FOLDER_TYPES.GENERAL) {
+                throw new Error("Parent folder must be a GENERAL folder");
+              }
+              // Only RECONCILIATION folders can have a parent
+              if (this.type !== FOLDER_TYPES.RECONCILIATION) {
+                throw new Error("Only reconciliation folders can have a parent folder");
+              }
+            }
+          },
+        },
+      },
+      createdBy: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        field: "created_by",
+        references: {
+          model: "users",
+          key: "id",
+        },
+        onDelete: "CASCADE",
+      },
+      statementFileUrl: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        field: "statement_file_url",
+        validate: {
+          customValidator(value) {
+            // Statement file URL is required for reconciliation folders
+            if (this.type === FOLDER_TYPES.RECONCILIATION && !value) {
+              throw new Error("Statement file is required for reconciliation folders");
+            }
+            // General folders should not have statement file
+            if (this.type === FOLDER_TYPES.GENERAL && value) {
+              throw new Error("General folders cannot have a statement file");
+            }
+          },
+        },
+      },
     },
     {
       tableName: "folders",
@@ -149,22 +224,52 @@ module.exports = (sequelize, DataTypes) => {
       as: "assignedTo",
     });
 
-    // Folder has many Transactions 
+    // Folder belongs to User (createdBy)
+    Folder.belongsTo(models.User, {
+      foreignKey: "createdBy",
+      as: "creator",
+    });
+
+    // Folder belongs to Folder (parent)
+    Folder.belongsTo(models.Folder, {
+      foreignKey: "parentFolderId",
+      as: "parentFolder",
+    });
+
+    // Folder has many Folders (children)
+    Folder.hasMany(models.Folder, {
+      foreignKey: "parentFolderId",
+      as: "childFolders",
+    });
+
+    // Folder has many Transactions
     Folder.hasMany(models.Transaction, {
       foreignKey: "folderId",
       as: "transactions",
     });
 
-    // Folder has many Receipts 
+    // Folder has many Receipts
     Folder.hasMany(models.Receipt, {
       foreignKey: "folderId",
       as: "receipts",
     });
 
-    // Folder has many Invoices 
+    // Folder has many Invoices
     Folder.hasMany(models.Invoice, {
       foreignKey: "folderId",
       as: "invoices",
+    });
+
+    // Folder has many GeneralFolderFiles (for direct file uploads to general folders)
+    Folder.hasMany(models.GeneralFolderFile, {
+      foreignKey: "folderId",
+      as: "files",
+    });
+
+    // Folder has one FolderAnalytics (for OCR analytics data)
+    Folder.hasOne(models.FolderAnalytics, {
+      foreignKey: "folderId",
+      as: "analytics",
     });
   };
 

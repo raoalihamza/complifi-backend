@@ -79,6 +79,7 @@ class TransactionRepository {
       total: transactions.length,
       matched: transactions.filter((t) => t.status === "MATCHED").length,
       exceptions: transactions.filter((t) => t.status === "EXCEPTION").length,
+      fees: transactions.filter((t) => t.status === "FEE").length,
       pending: transactions.filter((t) => t.status === "PENDING").length,
       flagged: transactions.filter((t) => t.flagged).length,
       totalValue: transactions.reduce((sum, t) => sum + parseFloat(t.value), 0),

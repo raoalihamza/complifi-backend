@@ -1,8 +1,10 @@
 const receiptRepository = require("../repositories/receiptRepository");
 const folderRepository = require("../repositories/folderRepository");
 const ocrService = require("../services/ocrService");
+const reconciliationService = require("../services/reconciliationService");
 const fileHelper = require("../helpers/fileHelper");
 const path = require("path");
+const { STATEMENT_TYPES, FOLDER_TYPES } = require("../config/constants");
 
 class ReceiptController {
   /**
@@ -23,11 +25,36 @@ class ReceiptController {
         });
       }
 
+      // Validate folder is a CARD reconciliation folder
+      if (folder.type !== FOLDER_TYPES.RECONCILIATION) {
+        return res.status(400).json({
+          success: false,
+          message: "Receipts can only be uploaded to reconciliation folders",
+        });
+      }
+
+      if (folder.statementType !== STATEMENT_TYPES.CARD) {
+        return res.status(400).json({
+          success: false,
+          message: "Receipts can only be uploaded to CARD statement folders. For BANK statements, please upload invoices instead.",
+        });
+      }
+
       // Validate files uploaded
       if (!req.files || req.files.length === 0) {
         return res.status(400).json({
           success: false,
           message: "No files uploaded",
+        });
+      }
+
+      // Validate file count (max 5)
+      if (req.files.length > 5) {
+        // Clean up uploaded files
+        req.files.forEach((file) => fileHelper.deleteFile(file.path));
+        return res.status(400).json({
+          success: false,
+          message: "Maximum 5 receipts can be uploaded at once",
         });
       }
 
@@ -78,11 +105,24 @@ class ReceiptController {
         }
       }
 
-      // Update folder status if any receipts were processed
+      // Perform automatic reconciliation if receipts were processed
+      let reconciliationResult = null;
       if (processedReceipts.length > 0) {
-        await folderRepository.update(folderId, {
-          status: "IN_PROGRESS",
-        });
+        try {
+          // Run reconciliation to match transactions with receipts
+          reconciliationResult = await reconciliationService.performReconciliation(
+            folderId
+          );
+
+          // Update folder status to IN_PROGRESS
+          await folderRepository.update(folderId, {
+            status: "IN_PROGRESS",
+          });
+        } catch (reconciliationError) {
+          console.error("Reconciliation error:", reconciliationError);
+          // Don't fail the whole request if reconciliation fails
+          // The receipts are still uploaded successfully
+        }
       }
 
       res.status(201).json({
@@ -92,6 +132,7 @@ class ReceiptController {
           receipts: processedReceipts,
           totalProcessed: processedReceipts.length,
           errors: errors.length > 0 ? errors : undefined,
+          reconciliation: reconciliationResult,
         },
       });
     } catch (error) {

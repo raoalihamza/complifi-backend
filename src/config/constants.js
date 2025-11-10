@@ -34,10 +34,17 @@ module.exports = {
     HIGH: "HIGH",
   },
 
-  // Transaction Status (for Phase 4)
+  // Statement Types
+  STATEMENT_TYPES: {
+    BANK: "BANK",
+    CARD: "CARD",
+  },
+
+  // Transaction Status
   TRANSACTION_STATUS: {
     MATCHED: "MATCHED",
     EXCEPTION: "EXCEPTION",
+    FEE: "FEE",
     PENDING: "PENDING",
   },
 
