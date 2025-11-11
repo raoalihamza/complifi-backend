@@ -1078,6 +1078,461 @@ Authorization: Bearer <token>
 
 ---
 
+### 10. Get Invoices for Folder
+
+**Purpose**: Retrieves all invoices uploaded to a BANK reconciliation folder with full OCR data
+
+**Endpoint**: `GET /transactions/folders/:folderId/invoices`
+
+**Authentication**: Required
+**Authorization**: User must be workspace member
+
+**Path Parameters**:
+- `folderId` (integer): Folder ID
+
+**Request Headers**:
+```
+Authorization: Bearer <token>
+```
+
+**Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "data": {
+    "invoices": [
+      {
+        "id": 22,
+        "folderId": 25,
+        "invoiceNumber": "INV-2024-001",
+        "invoiceDate": "2024-01-10T00:00:00.000Z",
+        "dueDate": "2024-02-10T00:00:00.000Z",
+        "vendorName": "ABC Supplier",
+        "amount": 500.00,
+        "tax": 50.00,
+        "netAmount": 450.00,
+        "imageUrl": "/uploads/invoices/invoice_9876.pdf",
+        "uploadedBy": 1,
+        "ocrData": {
+          "document_type": "invoice",
+          "invoice_number": "INV-2024-001",
+          "invoice_date": "2024-01-10",
+          "due_date": "2024-02-10",
+          "vendor": {
+            "name": "ABC Supplier",
+            "address": "123 Business St, City",
+            "phone": "+1-555-0123",
+            "email": "billing@abcsupplier.com",
+            "tax_id": "12-3456789"
+          },
+          "customer": {
+            "name": "Your Company",
+            "address": "456 Main St"
+          },
+          "currency": "USD",
+          "line_items": [
+            {
+              "description": "Professional Services",
+              "quantity": 10,
+              "unit_price": 45.00,
+              "line_total": 450.00
+            }
+          ],
+          "subtotal": 450.00,
+          "tax_total": 50.00,
+          "total_amount": 500.00,
+          "balance_due": 500.00,
+          "payment_terms": "Net 30",
+          "notes": "Thank you for your business"
+        },
+        "createdAt": "2024-01-20T12:00:00.000Z",
+        "updatedAt": "2024-01-20T12:00:00.000Z"
+      }
+    ],
+    "total": 3
+  }
+}
+```
+
+**Response Fields**:
+- `invoices`: Array of invoice objects with complete OCR data
+- `total`: Total number of invoices in the folder
+- `ocrData`: Complete OCR extraction including vendor details, line items, amounts, payment terms, etc.
+
+**Use Cases**:
+- Display all invoices for a BANK reconciliation folder
+- Show invoice details with full OCR extraction
+- Render invoice table in UI with vendor, amount, date, etc.
+- Access detailed line items and payment information
+
+**Important Notes**:
+- Returns all invoices for the folder with stored OCR data
+- OCR data is persisted in database and available anytime
+- Only available for BANK reconciliation folders
+- No need to re-upload invoices to view OCR data
+
+---
+
+### 11. Get Single Invoice
+
+**Purpose**: Retrieves detailed information about a specific invoice with full OCR data
+
+**Endpoint**: `GET /transactions/invoices/:id`
+
+**Authentication**: Required
+**Authorization**: User must be workspace member
+
+**Path Parameters**:
+- `id` (integer): Invoice ID
+
+**Request Headers**:
+```
+Authorization: Bearer <token>
+```
+
+**Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 22,
+    "folderId": 25,
+    "invoiceNumber": "INV-2024-001",
+    "invoiceDate": "2024-01-10T00:00:00.000Z",
+    "dueDate": "2024-02-10T00:00:00.000Z",
+    "vendorName": "ABC Supplier",
+    "amount": 500.00,
+    "tax": 50.00,
+    "netAmount": 450.00,
+    "imageUrl": "/uploads/invoices/invoice_9876.pdf",
+    "uploadedBy": 1,
+    "ocrData": {
+      "document_type": "invoice",
+      "invoice_number": "INV-2024-001",
+      "invoice_date": "2024-01-10",
+      "due_date": "2024-02-10",
+      "vendor": {
+        "name": "ABC Supplier",
+        "address": "123 Business St, City, State 12345",
+        "phone": "+1-555-0123",
+        "email": "billing@abcsupplier.com",
+        "website": "www.abcsupplier.com",
+        "tax_id": "12-3456789",
+        "bank_account": "987654321",
+        "bank_name": "First National Bank"
+      },
+      "customer": {
+        "name": "Your Company",
+        "address": "456 Main St, City, State 67890",
+        "phone": "+1-555-9876",
+        "email": "accounts@yourcompany.com"
+      },
+      "currency": "USD",
+      "line_items": [
+        {
+          "item_number": "SVC-001",
+          "description": "Professional Services - January 2024",
+          "quantity": 10,
+          "unit": "hours",
+          "unit_price": 45.00,
+          "tax_rate": 10.00,
+          "tax_amount": 45.00,
+          "line_total": 450.00
+        }
+      ],
+      "subtotal": 450.00,
+      "discount_total": 0.00,
+      "tax_breakdown": {
+        "Sales Tax": 50.00
+      },
+      "tax_total": 50.00,
+      "total_amount": 500.00,
+      "amount_paid": 0.00,
+      "balance_due": 500.00,
+      "payment_terms": "Net 30",
+      "payment_method": "Bank Transfer",
+      "notes": "Thank you for your business",
+      "terms_and_conditions": "Payment due within 30 days"
+    },
+    "createdAt": "2024-01-20T12:00:00.000Z",
+    "updatedAt": "2024-01-20T12:00:00.000Z"
+  }
+}
+```
+
+**Use Cases**:
+- View complete invoice details
+- Display full OCR extraction data
+- Show vendor and customer information
+- Access line items and payment terms
+- Display invoice in detail view/modal
+
+---
+
+### 12. View Invoice Image
+
+**Purpose**: Retrieves the invoice file/image for viewing or download
+
+**Endpoint**: `GET /transactions/invoices/:id/view`
+
+**Authentication**: Required
+**Authorization**: User must be workspace member
+
+**Path Parameters**:
+- `id` (integer): Invoice ID
+
+**Request Headers**:
+```
+Authorization: Bearer <token>
+```
+
+**Success Response (200 OK)**:
+- Returns the invoice file (PDF, JPG, PNG)
+- Content-Type header set based on file type
+- File is sent directly for browser viewing or download
+
+**Use Cases**:
+- Display invoice image in UI
+- Allow users to download original invoice file
+- Preview invoice in modal/lightbox
+- Verify OCR extraction accuracy
+
+**Error Responses**:
+
+**404 Not Found** - Invoice not found
+```json
+{
+  "success": false,
+  "message": "Invoice not found"
+}
+```
+
+---
+
+### 13. Get Receipts for Folder
+
+**Purpose**: Retrieves all receipts uploaded to a CARD reconciliation folder with full OCR data
+
+**Endpoint**: `GET /transactions/folders/:folderId/receipts`
+
+**Authentication**: Required
+**Authorization**: User must be workspace member
+
+**Path Parameters**:
+- `folderId` (integer): Folder ID
+
+**Request Headers**:
+```
+Authorization: Bearer <token>
+```
+
+**Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "data": {
+    "receipts": [
+      {
+        "id": 15,
+        "folderId": 25,
+        "receiptNumber": "R12345",
+        "merchantName": "Amazon",
+        "taxPaid": 4.50,
+        "total": 54.50,
+        "receiptDate": "2024-01-15T00:00:00.000Z",
+        "imageUrl": "/uploads/receipts/receipt_5678.pdf",
+        "uploadedBy": 1,
+        "ocrData": {
+          "receipt_type": "online",
+          "receipt_number": "R12345",
+          "merchant_name": "Amazon",
+          "merchant_address": null,
+          "merchant_phone": null,
+          "receipt_date": "2024-01-15",
+          "receipt_time": "14:30:00",
+          "currency": "USD",
+          "items": [
+            {
+              "item_name": "Wireless Mouse",
+              "quantity": 1,
+              "unit_price": 49.99,
+              "total_price": 49.99,
+              "discount": 0,
+              "tax": 4.50
+            }
+          ],
+          "subtotal": 49.99,
+          "discount_total": 0.00,
+          "tax_breakdown": {
+            "Sales Tax": 4.50
+          },
+          "tax_total": 4.50,
+          "tip_amount": 0.00,
+          "service_charge": 0.00,
+          "delivery_fee": 0.00,
+          "total": 54.50,
+          "amount_paid": 54.50,
+          "change_given": 0.00,
+          "payment_method": "card",
+          "card_last_4_digits": "1234",
+          "order_number": "112-7654321-1234567",
+          "transaction_id": "TXN123456789"
+        },
+        "createdAt": "2024-01-20T11:00:00.000Z",
+        "updatedAt": "2024-01-20T11:00:00.000Z"
+      }
+    ],
+    "total": 5
+  }
+}
+```
+
+**Response Fields**:
+- `receipts`: Array of receipt objects with complete OCR data
+- `total`: Total number of receipts in the folder
+- `ocrData`: Complete OCR extraction including merchant details, items, amounts, payment info, etc.
+
+**Use Cases**:
+- Display all receipts for a CARD reconciliation folder
+- Show receipt details with full OCR extraction
+- Render receipt table in UI with merchant, amount, date, etc.
+- Access detailed line items and payment information
+
+**Important Notes**:
+- Returns all receipts for the folder with stored OCR data
+- OCR data is persisted in database and available anytime
+- Only available for CARD reconciliation folders
+- No need to re-upload receipts to view OCR data
+
+---
+
+### 14. Get Single Receipt
+
+**Purpose**: Retrieves detailed information about a specific receipt with full OCR data
+
+**Endpoint**: `GET /transactions/receipts/:id`
+
+**Authentication**: Required
+**Authorization**: User must be workspace member
+
+**Path Parameters**:
+- `id` (integer): Receipt ID
+
+**Request Headers**:
+```
+Authorization: Bearer <token>
+```
+
+**Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 15,
+    "folderId": 25,
+    "receiptNumber": "R12345",
+    "merchantName": "Amazon",
+    "taxPaid": 4.50,
+    "total": 54.50,
+    "receiptDate": "2024-01-15T00:00:00.000Z",
+    "imageUrl": "/uploads/receipts/receipt_5678.pdf",
+    "uploadedBy": 1,
+    "ocrData": {
+      "receipt_type": "online",
+      "receipt_number": "R12345",
+      "merchant_name": "Amazon",
+      "merchant_address": "410 Terry Ave N, Seattle, WA 98109",
+      "merchant_phone": "1-888-280-4331",
+      "merchant_email": "support@amazon.com",
+      "merchant_website": "www.amazon.com",
+      "receipt_date": "2024-01-15",
+      "receipt_time": "14:30:00",
+      "currency": "USD",
+      "items": [
+        {
+          "item_name": "Logitech Wireless Mouse",
+          "quantity": 1,
+          "unit_price": 49.99,
+          "total_price": 49.99,
+          "discount": 0.00,
+          "tax": 4.50,
+          "category": "Electronics"
+        }
+      ],
+      "subtotal": 49.99,
+      "discount_total": 0.00,
+      "tax_breakdown": {
+        "Sales Tax": 4.50
+      },
+      "tax_total": 4.50,
+      "tip_amount": 0.00,
+      "service_charge": 0.00,
+      "delivery_fee": 0.00,
+      "total": 54.50,
+      "amount_paid": 54.50,
+      "change_given": 0.00,
+      "payment_method": "card",
+      "card_last_4_digits": "1234",
+      "order_number": "112-7654321-1234567",
+      "transaction_id": "TXN123456789",
+      "barcode": null,
+      "qr_code_data": null
+    },
+    "createdAt": "2024-01-20T11:00:00.000Z",
+    "updatedAt": "2024-01-20T11:00:00.000Z"
+  }
+}
+```
+
+**Use Cases**:
+- View complete receipt details
+- Display full OCR extraction data
+- Show merchant and item information
+- Access payment details
+- Display receipt in detail view/modal
+
+---
+
+### 15. View Receipt Image
+
+**Purpose**: Retrieves the receipt file/image for viewing or download
+
+**Endpoint**: `GET /transactions/receipts/:id/view`
+
+**Authentication**: Required
+**Authorization**: User must be workspace member
+
+**Path Parameters**:
+- `id` (integer): Receipt ID
+
+**Request Headers**:
+```
+Authorization: Bearer <token>
+```
+
+**Success Response (200 OK)**:
+- Returns the receipt file (PDF, JPG, PNG, WEBP)
+- Content-Type header set based on file type
+- File is sent directly for browser viewing or download
+
+**Use Cases**:
+- Display receipt image in UI
+- Allow users to download original receipt file
+- Preview receipt in modal/lightbox
+- Verify OCR extraction accuracy
+
+**Error Responses**:
+
+**404 Not Found** - Receipt not found
+```json
+{
+  "success": false,
+  "message": "Receipt not found"
+}
+```
+
+---
+
 ## Error Handling
 
 ### Common Error Codes
@@ -1123,7 +1578,13 @@ Authorization: Bearer <your-jwt-token>
 | POST | `/folders/:id/receipts` | ✅ | Upload receipts (CARD, max 5) |
 | POST | `/folders/:id/invoices` | ✅ | Upload invoices (BANK, max 5) |
 | GET | `/folders/:id/transactions` | ✅ | Get transactions with filters |
+| GET | `/folders/:id/invoices` | ✅ | Get all invoices for folder with OCR data |
+| GET | `/folders/:id/receipts` | ✅ | Get all receipts for folder with OCR data |
 | GET | `/transactions/:id` | ✅ | Get single transaction |
+| GET | `/invoices/:id` | ✅ | Get single invoice with OCR data |
+| GET | `/invoices/:id/view` | ✅ | View invoice file/image |
+| GET | `/receipts/:id` | ✅ | Get single receipt with OCR data |
+| GET | `/receipts/:id/view` | ✅ | View receipt file/image |
 | PATCH | `/transactions/:id/status` | ✅ | Update transaction status |
 | PATCH | `/transactions/:id/flag` | ✅ | Toggle transaction flag |
 | PUT | `/transactions/:id` | ✅ | Update transaction details |

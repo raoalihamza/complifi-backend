@@ -10,11 +10,17 @@ const {
   updateStatusSchema,
   updatePrioritySchema,
   assignFolderSchema,
+  createGeneralFolderSchema,
 } = require("../validations/foldervalidation");
 
 // Create general folder (empty folder)
 // POST /api/v1/folders/general
-router.post("/general", protect, folderController.createGeneralFolder);
+router.post(
+  "/general",
+  protect,
+  validate(createGeneralFolderSchema),
+  folderController.createGeneralFolder
+);
 
 // Direct folder routes (by ID)
 // GET /api/v1/folders/:id

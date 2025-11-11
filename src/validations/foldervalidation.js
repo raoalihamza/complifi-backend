@@ -80,10 +80,30 @@ const assignFolderSchema = Joi.object({
   }),
 });
 
+// Create General Folder Schema
+const createGeneralFolderSchema = Joi.object({
+  name: Joi.string().min(2).max(200).required().messages({
+    "string.min": "Folder name must be at least 2 characters long",
+    "string.max": "Folder name cannot exceed 200 characters",
+    "any.required": "Folder name is required",
+  }),
+  workspaceId: Joi.number().integer().positive().required().messages({
+    "number.base": "Workspace ID must be a number",
+    "number.integer": "Workspace ID must be an integer",
+    "number.positive": "Workspace ID must be positive",
+    "any.required": "Workspace ID is required",
+  }),
+  statementType: Joi.string().valid("BANK", "CARD").required().messages({
+    "any.only": "Statement type must be either BANK or CARD",
+    "any.required": "Statement type is required",
+  }),
+});
+
 module.exports = {
   createFolderSchema,
   updateFolderSchema,
   updateStatusSchema,
   updatePrioritySchema,
   assignFolderSchema,
+  createGeneralFolderSchema,
 };

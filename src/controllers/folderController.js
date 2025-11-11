@@ -316,7 +316,7 @@ class FolderController {
    */
   async createGeneralFolder(req, res) {
     try {
-      const { name, workspaceId } = req.body;
+      const { name, workspaceId, statementType } = req.body;
       const userId = req.user.id;
 
       if (!name || !workspaceId) {
@@ -328,10 +328,20 @@ class FolderController {
         );
       }
 
+      if (!statementType) {
+        return errorResponse(
+          res,
+          "Statement type is required (BANK or CARD)",
+          null,
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
       const folder = await folderService.createGeneralFolder(
         userId,
         parseInt(workspaceId),
-        name
+        name,
+        statementType
       );
 
       return successResponse(

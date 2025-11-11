@@ -83,6 +83,7 @@ class ReceiptController {
               : null,
             imageUrl: `/uploads/receipts/${file.filename}`,
             uploadedBy: userId,
+            ocrData: ocrData, // Store full OCR data
           };
 
           const receipt = await receiptRepository.create(receiptData);
@@ -90,10 +91,15 @@ class ReceiptController {
           // Attach full OCR data to response
           const enrichedReceipt = {
             ...receipt.toJSON(),
-            ocrData: ocrData, // Include complete OCR extraction
+            ocrExtraction: ocrData, // Include complete OCR extraction
           };
 
           processedReceipts.push(enrichedReceipt);
+
+          // Add delay between processing to avoid API overload
+          if (req.files.length > 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
         } catch (error) {
           console.error(`Error processing ${file.originalname}:`, error);
           errors.push({

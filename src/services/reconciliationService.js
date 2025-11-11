@@ -3,7 +3,7 @@ const { STATEMENT_TYPES, TRANSACTION_STATUS } = require("../config/constants");
 const { Op } = require("sequelize");
 
 /**
- * Calculate string similarity using Levenshtein distance
+ * Calculate string similarity using Levenshtein distance with enhanced partial matching
  * Returns a value between 0 and 1, where 1 is identical
  */
 function calculateStringSimilarity(str1, str2) {
@@ -13,6 +13,20 @@ function calculateStringSimilarity(str1, str2) {
   str2 = str2.toLowerCase().trim();
 
   if (str1 === str2) return 1;
+
+  // Check for partial contains (boost score if one contains the other)
+  let containsBoost = 0;
+  if (str1.includes(str2) || str2.includes(str1)) {
+    containsBoost = 0.3; // 30% boost if one contains the other
+  }
+
+  // Check for word overlap (common words between strings)
+  const words1 = str1.split(/\s+/);
+  const words2 = str2.split(/\s+/);
+  const commonWords = words1.filter(word =>
+    words2.some(w => w.includes(word) || word.includes(w))
+  );
+  const wordOverlapBoost = (commonWords.length / Math.max(words1.length, words2.length)) * 0.2;
 
   const len1 = str1.length;
   const len2 = str2.length;
@@ -39,9 +53,12 @@ function calculateStringSimilarity(str1, str2) {
   }
 
   const maxLen = Math.max(len1, len2);
-  const similarity = 1 - matrix[len1][len2] / maxLen;
+  const baseSimilarity = 1 - matrix[len1][len2] / maxLen;
 
-  return similarity;
+  // Combine base similarity with boosts
+  const finalSimilarity = Math.min(1, baseSimilarity + containsBoost + wordOverlapBoost);
+
+  return finalSimilarity;
 }
 
 /**
@@ -96,12 +113,12 @@ async function matchTransactionWithReceipts(transaction, receipts) {
     const dateMatch = areDatesWithinTolerance(
       transaction.date,
       receipt.receiptDate,
-      1
+      3 // ±3 days tolerance
     );
     const amountMatch = areAmountsMatching(
       transaction.value,
       receipt.total,
-      0.01
+      5 // ±5% tolerance
     );
     const merchantSimilarity = calculateStringSimilarity(
       transaction.merchantName,
@@ -141,12 +158,12 @@ async function matchTransactionWithInvoices(transaction, invoices) {
     const dateMatch = areDatesWithinTolerance(
       transaction.date,
       invoice.invoiceDate,
-      1
+      3 // ±3 days tolerance
     );
     const amountMatch = areAmountsMatching(
       transaction.value,
-      invoice.netAmount || invoice.amount,
-      0.01
+      invoice.amount, // Use total amount for matching
+      5 // ±5% tolerance
     );
     const vendorSimilarity = calculateStringSimilarity(
       transaction.merchantName,

@@ -56,6 +56,12 @@ module.exports = (sequelize, DataTypes) => {
           key: "id",
         },
       },
+      ocrData: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        field: "ocr_data",
+        comment: "Complete OCR extraction data from invoice",
+      },
     },
     {
       tableName: "invoices",

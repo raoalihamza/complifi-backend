@@ -453,7 +453,7 @@ class FolderService {
    * Create a General Folder (empty folder for organization)
    * SUPER_ADMIN and EDITOR can create general folders
    */
-  async createGeneralFolder(userId, workspaceId, folderName) {
+  async createGeneralFolder(userId, workspaceId, folderName, statementType) {
     try {
       // Verify user has access to workspace
       const hasAccess = await workspaceRepository.isMember(workspaceId, userId);
@@ -488,6 +488,7 @@ class FolderService {
         name: folderName,
         workspaceId,
         type: FOLDER_TYPES.GENERAL,
+        statementType,
         createdBy: userId,
         status: FOLDER_STATUS.TO_DO,
         complianceScore: 0,

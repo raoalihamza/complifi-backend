@@ -123,8 +123,8 @@ module.exports = (sequelize, DataTypes) => {
             if (this.type === FOLDER_TYPES.RECONCILIATION && !value) {
               throw new Error("Statement type is required for reconciliation folders");
             }
-            if (this.type === FOLDER_TYPES.GENERAL && value) {
-              throw new Error("General folders cannot have a statement type");
+            if (this.type === FOLDER_TYPES.GENERAL && !value) {
+              throw new Error("Statement type is required for general folders");
             }
           },
         },

@@ -67,24 +67,42 @@ class InvoiceController {
           // Run OCR on invoice
           const ocrData = await ocrService.processInvoice(file.path);
 
-          // Create invoice record
+          // Calculate netAmount (total - tax)
+          const totalAmount = parseFloat(ocrData.total_amount);
+          const taxAmount = ocrData.tax_total ? parseFloat(ocrData.tax_total) : 0;
+          const netAmount = totalAmount - taxAmount;
+
+          // Create invoice record with corrected field mapping
           const invoiceData = {
             folderId: parseInt(folderId),
-            invoiceNumber: ocrData.invoiceNumber || null,
-            invoiceDate: ocrData.invoiceDate
-              ? new Date(ocrData.invoiceDate)
+            invoiceNumber: ocrData.invoice_number || null,
+            invoiceDate: ocrData.invoice_date
+              ? new Date(ocrData.invoice_date)
               : null,
-            dueDate: ocrData.dueDate ? new Date(ocrData.dueDate) : null,
-            vendorName: ocrData.vendorName,
-            amount: parseFloat(ocrData.amount),
-            tax: ocrData.tax ? parseFloat(ocrData.tax) : null,
-            netAmount: parseFloat(ocrData.netAmount),
+            dueDate: ocrData.due_date ? new Date(ocrData.due_date) : null,
+            vendorName: ocrData.vendor?.name || "Unknown Vendor",
+            amount: totalAmount,
+            tax: taxAmount || null,
+            netAmount: netAmount,
             imageUrl: `/uploads/invoices/${file.filename}`,
             uploadedBy: userId,
+            ocrData: ocrData, // Store full OCR data
           };
 
           const invoice = await invoiceRepository.create(invoiceData);
-          processedInvoices.push(invoice);
+
+          // Attach full OCR data to response
+          const enrichedInvoice = {
+            ...invoice.toJSON(),
+            ocrExtraction: ocrData, // Include complete OCR extraction
+          };
+
+          processedInvoices.push(enrichedInvoice);
+
+          // Add delay between processing to avoid API overload
+          if (req.files.length > 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
         } catch (error) {
           console.error(`Error processing ${file.originalname}:`, error);
           errors.push({

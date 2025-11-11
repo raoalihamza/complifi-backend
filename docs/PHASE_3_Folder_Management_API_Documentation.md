@@ -163,7 +163,8 @@ Authorization: Bearer <token>
 ```json
 {
   "name": "2024 Tax Documents Archive",
-  "workspaceId": 1
+  "workspaceId": 1,
+  "statementType": "BANK"  // Required: 'BANK' or 'CARD'
 }
 ```
 
@@ -185,7 +186,7 @@ Authorization: Bearer <token>
     "priority": null,
     "assignedToId": null,
     "complianceScore": 0,
-    "statementType": null,
+    "statementType": 'BANK',
     "statementFileUrl": null,
     "parentFolderId": null,
     "createdBy": 1,
@@ -250,7 +251,7 @@ Authorization: Bearer <token>
 ?status=IN_PROGRESS              // Filter by status
 &priority=HIGH                   // Filter by priority
 &assignedToId=3                  // Filter by assigned user
-&type=RECONCILIATION             // Filter by folder type
+&type=RECONCILIATION             // Filter by folder type(GENERAL/RECONCILIATION)
 &statementType=CARD              // Filter by statement type (BANK/CARD)
 &search=january                  // Search in folder names
 &page=1                          // Page number (default: 1)

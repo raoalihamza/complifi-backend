@@ -100,13 +100,24 @@ GLOBAL DATA EXTRACTION POLICY
    - Record posted/settled amount in account currency (not original FX currency unless statement explicitly posts both).  
    - Preserve micro-values (0.01). Always output with 2 decimals.
 
-4) Description vs Merchant
-   - description = raw text exactly as shown (human readable).  
-   - merchant = normalized brand/entity name. Remove trailing city/country unless relevant.  
-   - Examples:  
-     • "Netflix.com Los Gatos SG" → merchant: "Netflix.com".  
-     • "DOCKERS MM ALAM LAHORE" → merchant: "DOCKERS MM ALAM LAHORE".  
-   - If only location given, combine with adjacent brand if clear.
+4) Description vs Merchant - **CRITICAL FOR MATCHING**
+   - **NEVER use generic merchant names like "Restaurant", "Grocery Store", "Gas Station", "Utilities", "Online Purchase", etc.**
+   - description = raw text exactly as shown (human readable).
+   - merchant = **EXTRACT THE ACTUAL BUSINESS NAME from the description field. This is critical for reconciliation matching.**
+   - **Rules for merchant extraction:**
+     • Look for business names in ALL CAPS, proper names, or branded names in the description
+     • Examples:
+       * "GARDEN BISTRO SPRINGFIELD" → merchant: "Garden Bistro Springfield"
+       * "SPRINGFIELD POWER & LIGHT ACH" → merchant: "Springfield Power & Light"
+       * "FRESH MARKET #1523" → merchant: "Fresh Market"
+       * "AMAZON.COM AMZN.COM/BILL WA" → merchant: "Amazon.com"
+       * "Netflix.com Los Gatos SG" → merchant: "Netflix.com"
+       * "DOCKERS MM ALAM LAHORE" → merchant: "DOCKERS MM ALAM LAHORE"
+       * "ATM WITHDRAWAL FIRST NATIONAL" → merchant: "ATM" (only if no specific bank/location)
+     • If transaction description contains a specific business name, USE IT. Do not replace with generic category.
+     • Only use generic names ("ATM", "Bank Transfer", "Online Transfer") if no specific merchant/business name is identifiable.
+     • Include location/branch details if they help identify the specific business location.
+   - **DO NOT categorize first, extract names first. The actual business name must be in the merchant field for successful matching.**
 
 5) Categories (must match one of these only)
    - purchase → POS/online buys.  
