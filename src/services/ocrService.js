@@ -1,12 +1,192 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
 const path = require("path");
+const XLSX = require("xlsx");
+const PDFDocument = require("pdfkit");
 
 class OCRService {
   constructor() {
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     // this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    // this.model = this.genAI.getGenerativeModel({
+    //   model: "gemini-1.5-pro-latest",
+    // });
+
+    // this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    this.model = this.genAI.getGenerativeModel({
+      model: "gemini-2.5-flash-lite",
+      generationConfig: {
+        temperature: 0.1,
+        topP: 0.95,
+        topK: 40,
+      },
+      safetySettings: [
+        {
+          category: "HARM_CATEGORY_HARASSMENT",
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_HATE_SPEECH",
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_NONE",
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_NONE",
+        },
+      ],
+      requestOptions: {
+        timeout: 300000, // 5 minutes timeout (300,000ms)
+      },
+    });
+  }
+
+  /**
+   * Retry logic for API calls with exponential backoff
+   */
+  async retryWithBackoff(fn, maxRetries = 3, initialDelay = 3000) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        const isLastAttempt = attempt === maxRetries;
+        const isRetriableError = error.message?.includes('fetch failed') ||
+                                error.message?.includes('ECONNRESET') ||
+                                error.message?.includes('ETIMEDOUT') ||
+                                error.message?.includes('503') ||
+                                error.message?.includes('Service Unavailable') ||
+                                error.message?.includes('timed out') ||
+                                error.message?.includes('timeout') ||
+                                error.message?.includes('429') ||
+                                error.message?.includes('Too Many Requests') ||
+                                error.message?.includes('500') ||
+                                error.message?.includes('502') ||
+                                error.message?.includes('504');
+
+        if (isLastAttempt || !isRetriableError) {
+          throw error;
+        }
+
+        const delay = initialDelay * Math.pow(2, attempt - 1); // Exponential backoff
+        console.log(`⚠️ API call failed (attempt ${attempt}/${maxRetries}): ${error.message}`);
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  /**
+   * Convert XLSX file to CSV format
+   */
+  convertXlsxToCsv(filePath) {
+    try {
+      const workbook = XLSX.readFile(filePath);
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const csv = XLSX.utils.sheet_to_csv(worksheet);
+      return csv;
+    } catch (error) {
+      console.error("XLSX to CSV conversion error:", error);
+      throw new Error(`Failed to convert XLSX to CSV: ${error.message}`);
+    }
+  }
+
+  /**
+   * Convert CSV/XLSX to PDF for better Gemini processing
+   */
+  async convertToPdf(filePath, ext) {
+    return new Promise((resolve, reject) => {
+      try {
+        console.log("📄 Converting to PDF format for better processing...");
+
+        // Get original filename without extension for title
+        const originalFileName = path.basename(filePath, ext);
+
+        // Read data based on file type
+        let data;
+        if (ext === ".xlsx" || ext === ".xls") {
+          const workbook = XLSX.readFile(filePath);
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        } else if (ext === ".csv") {
+          const csvContent = fs.readFileSync(filePath, "utf-8");
+          data = csvContent.split("\n").map((row) => row.split(","));
+        } else {
+          throw new Error("Unsupported file type for PDF conversion");
+        }
+
+        // Create PDF
+        const outputPath = filePath.replace(/\.(csv|xlsx|xls)$/i, "_converted.pdf");
+        const doc = new PDFDocument({
+          size: "A4",
+          margin: 30,
+          autoFirstPage: true
+        });
+        const stream = fs.createWriteStream(outputPath);
+
+        doc.pipe(stream);
+
+        // Add title with original filename
+        doc.fontSize(14).text(originalFileName, { align: "center" });
+        doc.moveDown();
+
+        // Calculate column widths
+        const pageWidth = doc.page.width - 60; // margins
+        const maxCols = data[0] ? data[0].length : 0;
+        const colWidth = maxCols > 0 ? pageWidth / maxCols : 100;
+
+        // Add table data
+        doc.fontSize(8);
+        let y = doc.y;
+
+        data.forEach((row, rowIndex) => {
+          // Check if need new page
+          if (y > doc.page.height - 100) {
+            doc.addPage();
+            y = 50;
+          }
+
+          let x = 30;
+          row.forEach((cell, cellIndex) => {
+            const cellText = String(cell || "").substring(0, 50); // Limit cell length
+            doc.text(cellText, x, y, {
+              width: colWidth - 5,
+              height: 20,
+              ellipsis: true,
+            });
+            x += colWidth;
+          });
+
+          y += 20;
+          doc.y = y;
+
+          // Add separator line after header
+          if (rowIndex === 0) {
+            doc.moveTo(30, y).lineTo(doc.page.width - 30, y).stroke();
+            y += 5;
+            doc.y = y;
+          }
+        });
+
+        doc.end();
+
+        stream.on("finish", () => {
+          console.log("✅ PDF conversion completed");
+          resolve(outputPath);
+        });
+
+        stream.on("error", (error) => {
+          reject(new Error(`PDF creation failed: ${error.message}`));
+        });
+      } catch (error) {
+        console.error("PDF conversion error:", error);
+        reject(new Error(`Failed to convert to PDF: ${error.message}`));
+      }
+    });
   }
 
   /**
@@ -14,11 +194,36 @@ class OCRService {
    * Extracts ALL transactions with comprehensive analytics
    */
   async processStatement(filePath) {
+    let pdfPath = null;
     try {
-      const fileBuffer = fs.readFileSync(filePath);
-      const base64Data = fileBuffer.toString("base64");
+      console.log(`📄 Processing statement file: ${path.basename(filePath)}`);
+      const startTime = Date.now();
 
-      const prompt = `
+      const ext = path.extname(filePath).toLowerCase();
+      let fileBuffer;
+      let mimeType;
+      let base64Data;
+      let processPath = filePath;
+
+      // Convert CSV/XLSX to PDF for better Gemini processing
+      if (ext === ".csv" || ext === ".xlsx" || ext === ".xls") {
+        pdfPath = await this.convertToPdf(filePath, ext);
+        processPath = pdfPath;
+        mimeType = "application/pdf";
+        fileBuffer = fs.readFileSync(pdfPath);
+        base64Data = fileBuffer.toString("base64");
+      } else {
+        console.log(`📖 Reading ${ext} file...`);
+        fileBuffer = fs.readFileSync(filePath);
+        mimeType = this.getMimeType(filePath);
+        base64Data = fileBuffer.toString("base64");
+      }
+
+      console.log(`🤖 Sending to Gemini AI (${mimeType})...`);
+
+      // Use retry logic for Gemini API call
+      const result = await this.retryWithBackoff(async () => {
+        const prompt = `
 SYSTEM ROLE
 You are a world-class financial statement parser and auditor.  
 You must robustly extract transactions from ANY type of bank/credit/debit statement, regardless of:  
@@ -225,17 +430,19 @@ GLOBAL DATA EXTRACTION POLICY
 RETURN ONLY THE JSON. NO EXTRA TEXT. NO MARKDOWN FENCES.
 `;
 
-      const result = await this.model.generateContent([
-        {
-          inlineData: {
-            mimeType: this.getMimeType(filePath),
-            data: base64Data,
+        return await this.model.generateContent([
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Data,
+            },
           },
-        },
-        prompt,
-      ]);
+          prompt,
+        ]);
+      });
 
       const response = result.response.text();
+      console.log("✅ Gemini AI response received");
 
       // Strip markdown fences if present
       let cleanedResponse = response.trim();
@@ -249,6 +456,7 @@ RETURN ONLY THE JSON. NO EXTRA TEXT. NO MARKDOWN FENCES.
         throw new Error("Invalid OCR response format");
       }
 
+      console.log("🔄 Parsing JSON response...");
       const parsedData = JSON.parse(jsonMatch[0]);
 
       // Validate transactions array
@@ -256,9 +464,25 @@ RETURN ONLY THE JSON. NO EXTRA TEXT. NO MARKDOWN FENCES.
         throw new Error("No transactions found in statement");
       }
 
+      const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`✅ Statement processing completed in ${elapsedTime}s`);
+      console.log(`📊 Extracted ${parsedData.transactions.length} transactions`);
+
+      // Clean up converted PDF
+      if (pdfPath && fs.existsSync(pdfPath)) {
+        fs.unlinkSync(pdfPath);
+        console.log("🧹 Cleaned up temporary PDF file");
+      }
+
       return parsedData;
     } catch (error) {
       console.error("Statement OCR Error:", error);
+
+      // Clean up converted PDF on error
+      if (pdfPath && fs.existsSync(pdfPath)) {
+        fs.unlinkSync(pdfPath);
+      }
+
       throw new Error(`Failed to process statement: ${error.message}`);
     }
   }

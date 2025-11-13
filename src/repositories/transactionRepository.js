@@ -14,7 +14,7 @@ class TransactionRepository {
     return await Transaction.findByPk(id);
   }
 
-  async findByFolderId(folderId, filters = {}) {
+  async findByFolderId(folderId, filters = {}, pagination = {}) {
     const where = { folderId };
 
     if (filters.status) {
@@ -35,10 +35,23 @@ class TransactionRepository {
       where.category = filters.category;
     }
 
-    return await Transaction.findAll({
+    const query = {
       where,
       order: [["date", "DESC"]],
-    });
+    };
+
+    // Add pagination if provided
+    if (pagination.limit !== undefined) {
+      query.limit = pagination.limit;
+      query.offset = pagination.offset || 0;
+    }
+
+    const { count, rows } = await Transaction.findAndCountAll(query);
+
+    return {
+      transactions: rows,
+      total: count,
+    };
   }
 
   async update(id, updateData) {
@@ -73,7 +86,8 @@ class TransactionRepository {
   }
 
   async getStatistics(folderId) {
-    const transactions = await this.findByFolderId(folderId);
+    const result = await this.findByFolderId(folderId);
+    const transactions = result.transactions;
 
     return {
       total: transactions.length,
@@ -84,6 +98,40 @@ class TransactionRepository {
       flagged: transactions.filter((t) => t.flagged).length,
       totalValue: transactions.reduce((sum, t) => sum + parseFloat(t.value), 0),
     };
+  }
+
+  async getTransactionCountsByFolders(folderIds) {
+    if (!folderIds || folderIds.length === 0) {
+      return {};
+    }
+
+    const transactions = await Transaction.findAll({
+      where: {
+        folderId: {
+          [Op.in]: folderIds,
+        },
+      },
+      attributes: ["folderId", "status"],
+    });
+
+    const counts = {};
+    folderIds.forEach((id) => {
+      counts[id] = {
+        matchedTransactions: 0,
+        exceptionTransactions: 0,
+      };
+    });
+
+    transactions.forEach((transaction) => {
+      const folderId = transaction.folderId;
+      if (transaction.status === "MATCHED") {
+        counts[folderId].matchedTransactions += 1;
+      } else if (transaction.status === "EXCEPTION") {
+        counts[folderId].exceptionTransactions += 1;
+      }
+    });
+
+    return counts;
   }
 }
 

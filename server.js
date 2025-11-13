@@ -75,10 +75,18 @@ const startServer = async () => {
       console.log("Using migrations for database schema management");
     }
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🌍 Environment: ${envConfig.nodeEnv}`);
     });
+
+    // Increase timeout for long-running operations (like OCR processing)
+    // Default is 2 minutes (120000ms), we increase to 10 minutes
+    server.timeout = 600000; // 10 minutes
+    server.keepAliveTimeout = 610000; // Slightly longer than timeout
+    server.headersTimeout = 620000; // Slightly longer than keepAliveTimeout
+
+    console.log("⏱️  Server timeout set to 10 minutes for OCR processing");
   } catch (error) {
     console.error("❌ Database connection failed:", error);
     process.exit(1);

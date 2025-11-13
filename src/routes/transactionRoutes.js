@@ -3,6 +3,7 @@ const router = express.Router();
 const transactionController = require("../controllers/transactionController");
 const {protect} = require("../middlewares/authMiddleware");
 const uploadMiddleware = require("../middlewares/uploadMiddleware");
+const {extendTimeout} = require("../middlewares/timeoutMiddleware");
 
 // All routes require authentication
 router.use(protect);
@@ -16,6 +17,7 @@ router.use(protect);
  */
 router.post(
   "/reconciliation/create",
+  extendTimeout(10), // Extend timeout to 10 minutes for OCR processing
   uploadMiddleware.single("statement"),
   transactionController.createReconciliationFolder
 );
@@ -27,6 +29,7 @@ router.post(
  */
 router.post(
   "/folders/:folderId/statements",
+  extendTimeout(10), // Extend timeout to 10 minutes for OCR processing
   uploadMiddleware.single("statement"),
   transactionController.uploadStatement
 );
@@ -46,34 +49,34 @@ router.get(
  * @desc    Get single transaction
  * @access  Private
  */
-router.get("/transactions/:id", transactionController.getTransaction);
+router.get("/:id", transactionController.getTransaction);
 
 /**
  * @route   PATCH /transactions/:id/status
  * @desc    Update transaction status
  * @access  Private
  */
-router.patch("/transactions/:id/status", transactionController.updateStatus);
+router.patch("/:id/status", transactionController.updateStatus);
 
 /**
  * @route   PATCH /transactions/:id/flag
  * @desc    Toggle transaction flag
  * @access  Private
  */
-router.patch("/transactions/:id/flag", transactionController.toggleFlag);
+router.patch("/:id/flag", transactionController.toggleFlag);
 
 /**
  * @route   PUT /transactions/:id
  * @desc    Update transaction
  * @access  Private
  */
-router.put("/transactions/:id", transactionController.updateTransaction);
+router.put("/:id", transactionController.updateTransaction);
 
 /**
  * @route   DELETE /transactions/:id
  * @desc    Delete transaction
  * @access  Private
  */
-router.delete("/transactions/:id", transactionController.deleteTransaction);
+router.delete("/:id", transactionController.deleteTransaction);
 
 module.exports = router;

@@ -1,3 +1,4 @@
+const path = require("path");
 const transactionRepository = require("../repositories/transactionRepository");
 const folderRepository = require("../repositories/folderRepository");
 const folderAnalyticsRepository = require("../repositories/folderAnalyticsRepository");
@@ -152,11 +153,12 @@ class TransactionController {
   /**
    * Get all transactions for a folder
    * GET /folders/:folderId/transactions
+   * Query params: status, flagged, startDate, endDate, category, page, limit
    */
   async getTransactions(req, res) {
     try {
       const { folderId } = req.params;
-      const { status, flagged, startDate, endDate, category } = req.query;
+      const { status, flagged, startDate, endDate, category, page, limit } = req.query;
 
       const filters = {};
       if (status) filters.status = status;
@@ -167,17 +169,38 @@ class TransactionController {
       }
       if (category) filters.category = category;
 
-      const transactions = await transactionRepository.findByFolderId(
+      // Pagination parameters
+      const pageNumber = parseInt(page) || 1;
+      const pageLimit = parseInt(limit) || 10;
+      const offset = (pageNumber - 1) * pageLimit;
+
+      const pagination = {
+        limit: pageLimit,
+        offset: offset,
+      };
+
+      const result = await transactionRepository.findByFolderId(
         folderId,
-        filters
+        filters,
+        pagination
       );
       const statistics = await transactionRepository.getStatistics(folderId);
 
       // Fetch analytics data for the folder
       const analytics = await folderAnalyticsRepository.findByFolderId(folderId);
 
+      const totalPages = Math.ceil(result.total / pageLimit);
+
       const responseData = {
-        transactions,
+        transactions: result.transactions,
+        pagination: {
+          currentPage: pageNumber,
+          totalPages: totalPages,
+          totalRecords: result.total,
+          recordsPerPage: pageLimit,
+          hasNextPage: pageNumber < totalPages,
+          hasPreviousPage: pageNumber > 1,
+        },
         statistics,
         filters: filters,
       };
@@ -419,18 +442,23 @@ class TransactionController {
       // Process statement with OCR
       const ocrData = await ocrService.processStatement(req.file.path);
 
-      // Generate folder name based on OCR data
-      // Try to extract date from statement
-      let folderName = `${statementType} Statement`;
+      // Generate folder name based on original filename
+      const fileNameWithoutExt = path.basename(
+        req.file.originalname,
+        path.extname(req.file.originalname)
+      );
+
+      // Use filename, optionally with date if available
+      let folderName = fileNameWithoutExt;
       if (ocrData.statement_period_start || ocrData.statement_period_end) {
         const date = new Date(
           ocrData.statement_period_end || ocrData.statement_period_start
         );
         const monthYear = date.toLocaleDateString("en-US", {
-          month: "long",
+          month: "short",
           year: "numeric",
         });
-        folderName = `${monthYear} - ${statementType === "BANK" ? "Bank" : "Card"} Data`;
+        folderName = `${fileNameWithoutExt} (${monthYear})`;
       }
 
       // Create reconciliation folder

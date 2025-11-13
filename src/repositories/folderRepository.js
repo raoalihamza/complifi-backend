@@ -1,5 +1,6 @@
 const { Folder, Workspace, User } = require("../models");
 const { Op } = require("sequelize");
+const transactionRepository = require("./transactionRepository");
 
 class FolderRepository {
   /**
@@ -34,11 +35,34 @@ class FolderRepository {
             as: "assignedTo",
             attributes: ["id", "name", "email"],
           },
+          {
+            model: User,
+            as: "creator",
+            attributes: ["id", "name", "email"],
+          },
           // Transaction, Receipt, Invoice will be added in Phase 4
         ];
       }
 
-      return await Folder.findOne(options);
+      const folder = await Folder.findOne(options);
+
+      if (folder && includeRelations) {
+        // Get transaction counts for this folder
+        const transactionCounts = await transactionRepository.getTransactionCountsByFolders([folder.id]);
+        const counts = transactionCounts[folder.id] || {
+          matchedTransactions: 0,
+          exceptionTransactions: 0,
+        };
+
+        const folderJson = folder.toJSON();
+        return {
+          ...folderJson,
+          matchedTransactions: counts.matchedTransactions,
+          exceptionTransactions: counts.exceptionTransactions,
+        };
+      }
+
+      return folder;
     } catch (error) {
       throw error;
     }
@@ -101,14 +125,37 @@ class FolderRepository {
             as: "assignedTo",
             attributes: ["id", "name", "email"],
           },
+          {
+            model: User,
+            as: "creator",
+            attributes: ["id", "name", "email"],
+          },
         ],
         limit,
         offset,
         order: [[sortBy, sortOrder]],
       });
 
+      // Get transaction counts for all folders
+      const folderIds = rows.map((folder) => folder.id);
+      const transactionCounts = await transactionRepository.getTransactionCountsByFolders(folderIds);
+
+      // Add transaction counts to each folder
+      const foldersWithCounts = rows.map((folder) => {
+        const folderJson = folder.toJSON();
+        const counts = transactionCounts[folder.id] || {
+          matchedTransactions: 0,
+          exceptionTransactions: 0,
+        };
+        return {
+          ...folderJson,
+          matchedTransactions: counts.matchedTransactions,
+          exceptionTransactions: counts.exceptionTransactions,
+        };
+      });
+
       return {
-        folders: rows,
+        folders: foldersWithCounts,
         pagination: {
           totalItems: count,
           totalPages: Math.ceil(count / limit),
