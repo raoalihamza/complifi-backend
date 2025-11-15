@@ -159,17 +159,38 @@ class ReceiptController {
   /**
    * Get all receipts for a folder
    * GET /folders/:folderId/receipts
+   * Query params: page, limit
    */
   async getReceipts(req, res) {
     try {
       const { folderId } = req.params;
-      const receipts = await receiptRepository.findByFolderId(folderId);
+      const { page, limit } = req.query;
+
+      // Pagination parameters
+      const pageNumber = parseInt(page) || 1;
+      const pageLimit = parseInt(limit) || 10;
+      const offset = (pageNumber - 1) * pageLimit;
+
+      const pagination = {
+        limit: pageLimit,
+        offset: offset,
+      };
+
+      const result = await receiptRepository.findByFolderId(folderId, pagination);
+      const totalPages = Math.ceil(result.total / pageLimit);
 
       res.status(200).json({
         success: true,
         data: {
-          receipts,
-          total: receipts.length,
+          receipts: result.receipts,
+          pagination: {
+            currentPage: pageNumber,
+            totalPages: totalPages,
+            totalRecords: result.total,
+            recordsPerPage: pageLimit,
+            hasNextPage: pageNumber < totalPages,
+            hasPreviousPage: pageNumber > 1,
+          },
         },
       });
     } catch (error) {

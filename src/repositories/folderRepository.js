@@ -117,6 +117,20 @@ class FolderRepository {
         };
       }
 
+      // Filter by closing date range (for reports)
+      if (filters.closingDateRange) {
+        where.closingDate = {
+          [Op.between]: [filters.closingDateRange.start, filters.closingDateRange.end],
+        };
+      }
+
+      // Filter by compliance score range
+      if (filters.complianceRange) {
+        where.complianceScore = {
+          [Op.between]: [filters.complianceRange.min, filters.complianceRange.max],
+        };
+      }
+
       const { count, rows } = await Folder.findAndCountAll({
         where,
         include: [

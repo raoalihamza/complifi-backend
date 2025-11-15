@@ -2,11 +2,15 @@ const { HTTP_STATUS } = require("../config/constants");
 const { errorResponse } = require("../utils/responseHandler");
 
 /**
- * Validate request body against Joi schema
+ * Validate request data against Joi schema
+ * @param {Object} schema - Joi validation schema
+ * @param {String} source - Source of data to validate: 'body', 'query', 'params' (default: 'body')
  */
-const validate = (schema) => {
+const validate = (schema, source = "body") => {
   return (req, res, next) => {
-    const { error, value } = schema.validate(req.body, {
+    const dataToValidate = req[source];
+
+    const { error, value } = schema.validate(dataToValidate, {
       abortEarly: false,
       stripUnknown: true,
     });
@@ -21,7 +25,7 @@ const validate = (schema) => {
       );
     }
 
-    req.body = value;
+    req[source] = value;
     next();
   };
 };

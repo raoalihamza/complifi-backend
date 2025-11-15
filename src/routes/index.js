@@ -8,6 +8,7 @@ const folderRoutes = require("./folderRoutes");
 const transactionRoutes = require("./transactionRoutes");
 const receiptRoutes = require("./receiptRoutes");
 const invoiceRoutes = require("./invoiceRoutes");
+const reportRoutes = require("./reportRoutes");
 
 // Mount routes
 router.use("/auth", authRoutes);
@@ -16,6 +17,7 @@ router.use("/folders", folderRoutes);
 router.use("/transactions", transactionRoutes);
 router.use("/transactions", receiptRoutes);
 router.use("/transactions", invoiceRoutes);
+router.use("/reports", reportRoutes);
 
 // Health check for API
 router.get("/", (req, res) => {
@@ -31,6 +33,7 @@ router.get("/", (req, res) => {
       transactions: "/api/v1/transactions",
       receipts: "/api/v1/receipts",
       invoices: "/api/v1/invoices",
+      reports: "/api/v1/reports",
     },
   });
 });

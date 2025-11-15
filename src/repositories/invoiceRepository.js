@@ -13,11 +13,24 @@ class InvoiceRepository {
     return await Invoice.findByPk(id);
   }
 
-  async findByFolderId(folderId) {
-    return await Invoice.findAll({
+  async findByFolderId(folderId, pagination = {}) {
+    const query = {
       where: { folderId },
       order: [["invoiceDate", "DESC"]],
-    });
+    };
+
+    // Add pagination if provided
+    if (pagination.limit !== undefined) {
+      query.limit = pagination.limit;
+      query.offset = pagination.offset || 0;
+    }
+
+    const { count, rows } = await Invoice.findAndCountAll(query);
+
+    return {
+      invoices: rows,
+      total: count,
+    };
   }
 
   async update(id, updateData) {

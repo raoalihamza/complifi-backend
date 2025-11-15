@@ -162,17 +162,38 @@ class InvoiceController {
   /**
    * Get all invoices for a folder
    * GET /folders/:folderId/invoices
+   * Query params: page, limit
    */
   async getInvoices(req, res) {
     try {
       const { folderId } = req.params;
-      const invoices = await invoiceRepository.findByFolderId(folderId);
+      const { page, limit } = req.query;
+
+      // Pagination parameters
+      const pageNumber = parseInt(page) || 1;
+      const pageLimit = parseInt(limit) || 10;
+      const offset = (pageNumber - 1) * pageLimit;
+
+      const pagination = {
+        limit: pageLimit,
+        offset: offset,
+      };
+
+      const result = await invoiceRepository.findByFolderId(folderId, pagination);
+      const totalPages = Math.ceil(result.total / pageLimit);
 
       res.status(200).json({
         success: true,
         data: {
-          invoices,
-          total: invoices.length,
+          invoices: result.invoices,
+          pagination: {
+            currentPage: pageNumber,
+            totalPages: totalPages,
+            totalRecords: result.total,
+            recordsPerPage: pageLimit,
+            hasNextPage: pageNumber < totalPages,
+            hasPreviousPage: pageNumber > 1,
+          },
         },
       });
     } catch (error) {

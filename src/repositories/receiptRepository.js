@@ -13,11 +13,24 @@ class ReceiptRepository {
     return await Receipt.findByPk(id);
   }
 
-  async findByFolderId(folderId) {
-    return await Receipt.findAll({
+  async findByFolderId(folderId, pagination = {}) {
+    const query = {
       where: { folderId },
       order: [["createdAt", "DESC"]],
-    });
+    };
+
+    // Add pagination if provided
+    if (pagination.limit !== undefined) {
+      query.limit = pagination.limit;
+      query.offset = pagination.offset || 0;
+    }
+
+    const { count, rows } = await Receipt.findAndCountAll(query);
+
+    return {
+      receipts: rows,
+      total: count,
+    };
   }
 
   async update(id, updateData) {
