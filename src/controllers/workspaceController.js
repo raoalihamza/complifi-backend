@@ -328,7 +328,31 @@ class WorkspaceController {
   }
 
   /**
+   * Verify workspace invitation token
+   * GET /api/v1/workspaces/verify-invitation/:token
+   */
+  async verifyInvitation(req, res) {
+    try {
+      const { token } = req.params;
+
+      const result = await workspaceService.verifyInvitation(token);
+
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: "Invitation verified successfully",
+        data: result,
+      });
+    } catch (error) {
+      res.status(error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  }
+
+  /**
    * Accept workspace invitation
+   * POST /api/v1/workspaces/accept-invitation
    */
   async acceptInvitation(req, res) {
     try {

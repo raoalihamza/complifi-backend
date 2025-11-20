@@ -85,6 +85,16 @@ router.post(
 );
 
 /**
+ * @route   GET /api/v1/workspaces/verify-invitation/:token
+ * @desc    Verify workspace invitation token
+ * @access  Public
+ */
+router.get(
+  "/verify-invitation/:token",
+  workspaceController.verifyInvitation
+);
+
+/**
  * @route   POST /api/v1/workspaces/accept-invitation
  * @desc    Accept workspace invitation
  * @access  Public

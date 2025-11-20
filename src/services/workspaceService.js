@@ -398,6 +398,46 @@ class WorkspaceService {
   }
 
   /**
+   * Verify workspace invitation token
+   * Checks if invitation is valid and if user already exists
+   */
+  async verifyInvitation(token) {
+    try {
+      // Find invitation using repository
+      const invitation = await workspaceRepository.findByInvitationToken(token);
+
+      if (!invitation) {
+        const error = new Error("Invalid or expired invitation");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      const { workspace, email, role } = invitation;
+
+      // Verify email is stored in invitation
+      if (!email) {
+        const error = new Error("Invalid invitation: email not found");
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
+      // Check if user already exists
+      const existingUser = await userRepository.findByEmail(email);
+
+      return {
+        isValidInvitation: true,
+        isExistingUser: !!existingUser,
+        email,
+        userName: existingUser ? existingUser.name : null,
+        workspaceName: workspace.name,
+        role,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Accept workspace invitation
    * Auto-creates user account if doesn't exist
    * Auto-verifies email (no OTP needed)
