@@ -39,18 +39,27 @@ class TransactionController {
 
       console.log("OCR Data:", ocrData);
 
-      // Create transactions from OCR data
-      const transactionsData = ocrData.transactions.map((transaction) => ({
-        folderId: parseInt(folderId),
-        merchantName: transaction.merchant || transaction.description,
-        date: new Date(transaction.date),
-        value: parseFloat(transaction.amount),
-        category: transaction.category || null,
-        status: "PENDING",
-        flagged:
-          transaction.flags && transaction.flags.length > 0 ? true : false,
-        notes: transaction.flags ? JSON.stringify(transaction.flags) : null,
-      }));
+      // Create transactions from OCR data - Classify as FEE or EXCEPTION
+      const transactionsData = ocrData.transactions.map((transaction) => {
+        // Check if this is a fee transaction (same logic as createReconciliationFolder)
+        const isFee =
+          transaction.category &&
+          (transaction.category.toLowerCase().includes("fee") ||
+            transaction.category.toLowerCase().includes("charge") ||
+            transaction.category.toLowerCase().includes("interest"));
+
+        return {
+          folderId: parseInt(folderId),
+          merchantName: transaction.merchant || transaction.description,
+          date: new Date(transaction.date),
+          value: parseFloat(transaction.amount),
+          category: transaction.category || null,
+          status: isFee ? TRANSACTION_STATUS.FEE : TRANSACTION_STATUS.EXCEPTION,
+          flagged:
+            transaction.flags && transaction.flags.length > 0 ? true : false,
+          notes: transaction.flags ? JSON.stringify(transaction.flags) : null,
+        };
+      });
 
       const createdTransactions = await transactionRepository.bulkCreate(
         transactionsData
@@ -281,10 +290,12 @@ class TransactionController {
       const { id } = req.params;
       const { status } = req.body;
 
-      if (!["MATCHED", "EXCEPTION", "PENDING"].includes(status)) {
+      // Valid statuses for reconciliation: MATCHED, EXCEPTION, FEE
+      // PENDING kept for backward compatibility but not recommended for reconciliation
+      if (!["MATCHED", "EXCEPTION", "FEE", "PENDING"].includes(status)) {
         return res.status(400).json({
           success: false,
-          message: "Invalid status value",
+          message: "Invalid status value. Must be MATCHED, EXCEPTION, or FEE",
         });
       }
 

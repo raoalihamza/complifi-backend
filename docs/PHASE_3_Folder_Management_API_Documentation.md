@@ -751,10 +751,30 @@ Authorization: Bearer <token>
 
 **Query Parameters**:
 ```
+// Single value filters (backward compatible)
 ?priority=HIGH              // Filter by priority
 &assignedToId=3            // Filter by assigned user
 &type=RECONCILIATION       // Filter by folder type
 &statementType=BANK        // Filter by statement type
+```
+
+```
+// Multiple value filters (NEW)
+?priority=MEDIUM,HIGH      // Filter by multiple priorities (comma-separated)
+&priority=MEDIUM&priority=HIGH  // Or use multiple query params
+?assignedToId=3,5,8        // Filter by multiple assignees (comma-separated)
+&assignedToId=3&assignedToId=5  // Or use multiple query params
+```
+
+```
+// Special "no assignee" filter (NEW)
+?assignedToId=null         // Filter unassigned folders only
+&assignedToId=null,3,5     // Mix: no assignee OR specific users
+```
+
+```
+// Combined filters
+?priority=MEDIUM,HIGH&assignedToId=3,5,null&statementType=BANK
 ```
 
 **Request Headers**:
@@ -780,7 +800,16 @@ Authorization: Bearer <token>
           "statementType": "CARD",
           "complianceScore": 0,
           "assignedToId": null,
-          "createdAt": "2024-01-25T08:00:00.000Z"
+          "assignedTo": null,
+          "creator": {
+            "id": 1,
+            "name": "John Doe",
+            "email": "john@example.com"
+          },
+          "matchedTransactions": 0,
+          "exceptionTransactions": 15,
+          "createdAt": "2024-01-25T08:00:00.000Z",
+          "updatedAt": "2024-01-25T08:00:00.000Z"
         }
       ]
     },
@@ -801,7 +830,15 @@ Authorization: Bearer <token>
             "name": "Sarah Wilson",
             "email": "sarah@example.com"
           },
-          "createdAt": "2024-01-20T10:30:00.000Z"
+          "creator": {
+            "id": 1,
+            "name": "John Doe",
+            "email": "john@example.com"
+          },
+          "matchedTransactions": 45,
+          "exceptionTransactions": 5,
+          "createdAt": "2024-01-20T10:30:00.000Z",
+          "updatedAt": "2024-01-22T14:20:00.000Z"
         }
       ]
     },
@@ -817,18 +854,44 @@ Authorization: Bearer <token>
 }
 ```
 
+Filter Examples:
+Single Priority (backward compatible):
+```GET /workspaces/2/job-board?priority=HIGH```
+
+Multiple Priorities (NEW):
+```GET /workspaces/2/job-board?priority=MEDIUM,HIGH```
+
+Multiple Assignees (NEW):
+```GET /workspaces/2/job-board?assignedToId=3,5,8```
+
+Unassigned Folders Only (NEW):
+```GET /workspaces/2/job-board?assignedToId=null```
+
+Unassigned + Specific Users (NEW):
+```GET /workspaces/2/job-board?assignedToId=null,3,5```
+
+Combined Filters (NEW):
+```GET /workspaces/2/job-board?priority=MEDIUM,HIGH&assignedToId=3,5,null&statementType=BANK```
+
 **Use Cases**:
 - Kanban board visualization
 - Dashboard for reconciliation progress
-- Filter by assignee to show user-specific board
-- Filter by priority to show high-priority items
+- Filter by multiple assignees to show team-specific board
+- Filter by multiple priorities to show high/medium priority items
+- Filter unassigned folders for assignment workflow
 - Filter by statementType to separate BANK and CARD workflows
+- Combined filters for advanced board views (e.g., "Show me all MEDIUM   and HIGH priority folders assigned to User 3 or User 5, or unassigned")
 
 **Important Notes**:
 - Only shows RECONCILIATION folders (not GENERAL folders)
 - Groups folders by status columns
 - Returns count for each status column
 - Supports same filters as GET /folders endpoint
+- Multiple filters work with AND logic between filter types, OR logic within same filter type
+  - Example: priority=MEDIUM,HIGH&assignedToId=3,5 means (priority is MEDIUM OR HIGH) AND (assignedTo is 3 OR 5)
+- All filters are optional - omit to see all reconciliation folders
+- Backward compatible: Old single-value filter API calls still work exactly the same
+- Each folder includes transaction counts (matchedTransactions, exceptionTransactions)
 
 ---
 

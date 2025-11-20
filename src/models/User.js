@@ -49,6 +49,18 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: false,
         field: "is_super_admin",
       },
+      isOwner: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        field: "is_owner",
+      },
+      isActive: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+        field: "is_active",
+      },
       // Email Verification Fields
       isEmailVerified: {
         type: DataTypes.BOOLEAN,
@@ -130,6 +142,12 @@ module.exports = (sequelize, DataTypes) => {
         {
           fields: ["is_super_admin"],
         },
+        {
+          fields: ["is_owner"],
+        },
+        {
+          fields: ["is_active"],
+        },
       ],
       hooks: {
         // Hash password before creating user
@@ -158,7 +176,7 @@ module.exports = (sequelize, DataTypes) => {
   // Instance method to generate JWT token
   User.prototype.generateAuthToken = function () {
     return jwt.sign(
-      { id: this.id, email: this.email, isSuperAdmin: this.isSuperAdmin }, // ✅ Add isSuperAdmin
+      { id: this.id, email: this.email, isSuperAdmin: this.isSuperAdmin, isOwner: this.isOwner },
       envConfig.jwt.secret,
       { expiresIn: envConfig.jwt.expire }
     );

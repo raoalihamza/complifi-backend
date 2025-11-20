@@ -127,6 +127,13 @@ class AuthService {
         throw error;
       }
 
+      // Check if account is active
+      if (!user.isActive) {
+        const error = new Error("Your account has been suspended. Please contact support.");
+        error.statusCode = HTTP_STATUS.FORBIDDEN;
+        throw error;
+      }
+
       // Update last login
       await userRepository.updateLastLogin(user.id);
 

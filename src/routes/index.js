@@ -9,6 +9,7 @@ const transactionRoutes = require("./transactionRoutes");
 const receiptRoutes = require("./receiptRoutes");
 const invoiceRoutes = require("./invoiceRoutes");
 const reportRoutes = require("./reportRoutes");
+const superAdminRoutes = require("./superAdminRoutes");
 
 // Mount routes
 router.use("/auth", authRoutes);
@@ -18,6 +19,7 @@ router.use("/transactions", transactionRoutes);
 router.use("/transactions", receiptRoutes);
 router.use("/transactions", invoiceRoutes);
 router.use("/reports", reportRoutes);
+router.use("/super-admin", superAdminRoutes);
 
 // Health check for API
 router.get("/", (req, res) => {
@@ -34,6 +36,7 @@ router.get("/", (req, res) => {
       receipts: "/api/v1/receipts",
       invoices: "/api/v1/invoices",
       reports: "/api/v1/reports",
+      superAdmin: "/api/v1/super-admin",
     },
   });
 });

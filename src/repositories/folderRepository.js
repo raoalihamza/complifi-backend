@@ -85,16 +85,50 @@ class FolderRepository {
       const where = { workspaceId };
 
       // Apply filters
+      // Status filter - supports single value or array
       if (filters.status) {
-        where.status = filters.status;
+        if (Array.isArray(filters.status)) {
+          where.status = { [Op.in]: filters.status };
+        } else {
+          where.status = filters.status;
+        }
       }
 
+      // Priority filter - supports single value or array
       if (filters.priority) {
-        where.priority = filters.priority;
+        if (Array.isArray(filters.priority)) {
+          where.priority = { [Op.in]: filters.priority };
+        } else {
+          where.priority = filters.priority;
+        }
       }
 
-      if (filters.assignedToId) {
-        where.assignedToId = filters.assignedToId;
+      // Assignee filter - supports single value, array, and null (no assignee)
+      if (filters.assignedToId !== undefined) {
+        if (Array.isArray(filters.assignedToId)) {
+          // Check if array contains null (no assignee)
+          const hasNull = filters.assignedToId.includes(null);
+          const nonNullIds = filters.assignedToId.filter(id => id !== null);
+
+          if (hasNull && nonNullIds.length > 0) {
+            // Filter for both null and specific IDs
+            where.assignedToId = {
+              [Op.or]: [
+                { [Op.in]: nonNullIds },
+                { [Op.is]: null }
+              ]
+            };
+          } else if (hasNull) {
+            // Only null (no assignee)
+            where.assignedToId = { [Op.is]: null };
+          } else {
+            // Only specific IDs
+            where.assignedToId = { [Op.in]: nonNullIds };
+          }
+        } else {
+          // Single value
+          where.assignedToId = filters.assignedToId;
+        }
       }
 
       if (filters.type) {
@@ -129,6 +163,11 @@ class FolderRepository {
         where.complianceScore = {
           [Op.between]: [filters.complianceRange.min, filters.complianceRange.max],
         };
+      }
+
+      // Filter by parent folder ID
+      if (filters.parentFolderId !== undefined) {
+        where.parentFolderId = filters.parentFolderId;
       }
 
       const { count, rows } = await Folder.findAndCountAll({
@@ -168,6 +207,21 @@ class FolderRepository {
         };
       });
 
+      // Get total counts by folder type for the workspace
+      const totalReconciliationFolders = await Folder.count({
+        where: {
+          workspaceId,
+          type: 'RECONCILIATION'
+        },
+      });
+
+      const totalGeneralFolders = await Folder.count({
+        where: {
+          workspaceId,
+          type: 'GENERAL'
+        },
+      });
+
       return {
         folders: foldersWithCounts,
         pagination: {
@@ -175,6 +229,8 @@ class FolderRepository {
           totalPages: Math.ceil(count / limit),
           currentPage: page,
           itemsPerPage: limit,
+          totalReconciliationFolders,
+          totalGeneralFolders,
         },
       };
     } catch (error) {

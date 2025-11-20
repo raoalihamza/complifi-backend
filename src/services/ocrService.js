@@ -280,12 +280,41 @@ NEVER add fictional data. NEVER return prose.
 -----------------------------------------------------
 GLOBAL DATA EXTRACTION POLICY
 
+⚠️ ⚠️ ⚠️ **CRITICAL EXTRACTION REQUIREMENT - READ THIS FIRST** ⚠️ ⚠️ ⚠️
+
+**YOU MUST EXTRACT ALL TRANSACTION TYPES:**
+1. **MERCHANT PURCHASES** (stores, restaurants, online shopping, services) - THESE ARE THE MAJORITY OF TRANSACTIONS
+2. Bank fees (service charges, late fees, annual fees)
+3. Government taxes (VAT, advance tax, withholding tax)
+4. Interest charges
+5. Payments received
+6. Refunds/credits
+
+**COMMON ERROR TO AVOID:**
+- DO NOT extract only fees/taxes/interest and skip merchant purchases
+- DO NOT ignore transaction rows just because they look like regular purchases
+- MERCHANT PURCHASES are usually the MOST NUMEROUS transactions on a statement
+
+**Example of what you MUST extract (from a typical statement):**
+- "ASTROLINE.TODAY 539-2142611 US" with amount 2,868.63 → MUST extract as purchase, merchant: "ASTROLINE.TODAY"
+- "DOCKERS MM ALAM LAHORE PK" with amount 9,536.00 → MUST extract as purchase, merchant: "DOCKERS MM ALAM"
+- "Netflix.com Los Gatos SG" with amount 450.00 → MUST extract as subscription, merchant: "Netflix.com"
+- "FOREIGN TRANSACTION FEE" with amount 129.09 → Extract as fee, merchant: "Bank"
+- "LATE PAYMENT CHARGE" with amount 2,500.00 → Extract as fee, merchant: "Bank"
+
+**Validation:** After extraction, check your transaction count:
+- If you have MORE fees than purchases, you have likely MISSED merchant purchases. Re-scan the statement.
+- A typical statement has 60-80% merchant purchases, 20-40% fees/taxes/interest.
+
+-----------------------------------------------------
+
 1) Transaction Line Discovery
-   - Prefer table blocks (Date | Description | Amount | Balance).  
-   - If no tables, infer transactions from repeating patterns (date + amount + text).  
-   - Handle multi-column pages, headers/footers, balance carryovers, watermarks.  
-   - Merge wrapped lines into the parent transaction if no new date/amount appears.  
+   - Prefer table blocks (Date | Description | Amount | Balance).
+   - If no tables, infer transactions from repeating patterns (date + amount + text).
+   - Handle multi-column pages, headers/footers, balance carryovers, watermarks.
+   - Merge wrapped lines into the parent transaction if no new date/amount appears.
    - Skip non-transactional rows (balance carried forward, opening balance, closing balance, credit limit, interest rate notices).
+   - **Every row with a date, description, and amount is a transaction - extract it regardless of whether it's a purchase, fee, tax, or payment.**
 
 2) Dates
    - Accept any global date format: DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, YYYY/MM/DD, DD.MM.YYYY, YYYY.MM.DD, DD-MMM-YYYY, 01 Jan 2025, 1-June-25, etc.  
@@ -309,20 +338,52 @@ GLOBAL DATA EXTRACTION POLICY
    - **NEVER use generic merchant names like "Restaurant", "Grocery Store", "Gas Station", "Utilities", "Online Purchase", etc.**
    - description = raw text exactly as shown (human readable).
    - merchant = **EXTRACT THE ACTUAL BUSINESS NAME from the description field. This is critical for reconciliation matching.**
-   - **Rules for merchant extraction:**
-     • Look for business names in ALL CAPS, proper names, or branded names in the description
-     • Examples:
-       * "GARDEN BISTRO SPRINGFIELD" → merchant: "Garden Bistro Springfield"
-       * "SPRINGFIELD POWER & LIGHT ACH" → merchant: "Springfield Power & Light"
-       * "FRESH MARKET #1523" → merchant: "Fresh Market"
-       * "AMAZON.COM AMZN.COM/BILL WA" → merchant: "Amazon.com"
-       * "Netflix.com Los Gatos SG" → merchant: "Netflix.com"
-       * "DOCKERS MM ALAM LAHORE" → merchant: "DOCKERS MM ALAM LAHORE"
-       * "ATM WITHDRAWAL FIRST NATIONAL" → merchant: "ATM" (only if no specific bank/location)
-     • If transaction description contains a specific business name, USE IT. Do not replace with generic category.
-     • Only use generic names ("ATM", "Bank Transfer", "Online Transfer") if no specific merchant/business name is identifiable.
-     • Include location/branch details if they help identify the specific business location.
+
+   - **MERCHANT EXTRACTION RULES (MANDATORY - APPLIES TO ALL BANKS GLOBALLY):**
+     • **Primary rule: The merchant field MUST contain the actual business/store/service provider name, NOT the issuing bank's name (e.g., NOT "Bank Alfalah", "HDFC", "Citibank", "Emirates NBD", etc.).**
+     • **Universal Pattern: In the description column, the merchant/business name typically appears FIRST, before location/country codes or transaction details.**
+     • **Generic Examples (Pattern applies to ALL banks worldwide):**
+       * "[Business Name] [Location] [Country Code]" → merchant: "[Business Name]" ✓ (NOT "[Bank Name]" ✗)
+       * "ASTROLINE.TODAY 539-2142611 US" → merchant: "ASTROLINE.TODAY" ✓
+       * "DOCKERS MM ALAM LAHORE PK" → merchant: "DOCKERS MM ALAM" ✓
+       * "Netflix.com Los Gatos SG" → merchant: "Netflix.com" ✓
+       * "Starbucks Coffee Seattle US" → merchant: "Starbucks Coffee" ✓
+       * "Amazon.com AMZN.COM/BILL WA" → merchant: "Amazon.com" ✓
+       * "مطعم البيك الرياض SA" → merchant: "Mataam Al Baik" ✓ (transliterated)
+     • **Bank/System Fees (Universal across all banks):**
+       * "FOREIGN TRANSACTION FEE" → merchant: "Bank" ✓
+       * "LATE PAYMENT CHARGE" / "LATE FEE" → merchant: "Bank" ✓
+       * "SERVICE CHARGE" / "ANNUAL FEE" → merchant: "Bank" ✓
+       * "OVERLIMIT FEE" / "CASH ADVANCE FEE" → merchant: "Bank" ✓
+       * "SMS BANKING FEE" / "STATEMENT FEE" → merchant: "Bank" ✓
+       * "EXCISE DUTY ON CHARGES" / "GST ON FEES" → merchant: "Bank" ✓
+     • **Government Taxes (Universal):**
+       * "Adv Tax-236Y" / "TDS" / "Withholding Tax" → merchant: "Tax Authority" ✓
+       * "PRA IT Services Tax" / "VAT" / "Sales Tax" → merchant: "Tax Authority" ✓
+     • **Key distinction applicable to ALL banks worldwide:**
+       - **Merchant purchases**: Extract the actual business name from description (restaurant, store, service provider, etc.)
+       - **Bank fees**: Use "Bank" as merchant (ANY fee/charge imposed by the card-issuing bank)
+       - **Government taxes**: Use "Tax Authority" as merchant (ANY government-imposed tax)
+     • If transaction description contains a specific business name, USE IT. Do not replace with generic category or the bank's name.
+     • Only use "Bank" for bank-imposed fees/charges with no external merchant.
+     • This pattern works for ALL banks: American Express, Visa, Mastercard, regional banks in Pakistan/India/UAE/Saudi/Egypt/Turkey/Malaysia/Indonesia, etc.
    - **DO NOT categorize first, extract names first. The actual business name must be in the merchant field for successful matching.**
+
+   - **MANDATORY ARABIC TRANSLITERATION RULE (CRITICAL):**
+     ⚠️ **ABSOLUTE REQUIREMENT: ALL Arabic script MUST be converted to Latin script (English letters) in the merchant field.**
+     • If you see Arabic characters (ا ب ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن ه و ي), you MUST transliterate to English.
+     • **NEVER output Arabic script in the merchant field. Only Latin alphabet is allowed.**
+     • Transliteration examples (phonetic conversion, NOT translation):
+       * "مطعم البيك" → merchant: "Mataam Al Baik" ✓ (NOT "مطعم البيك" ✗)
+       * "صيدلية النهدي" → merchant: "Saydaliyat Al Nahdi" ✓ (NOT "صيدلية النهدي" ✗)
+       * "هايبر بنده" → merchant: "Hyper Panda" ✓ (NOT "هايبر بنده" ✗)
+       * "كافيه نجد" → merchant: "Cafe Najd" ✓ (NOT "كافيه نجد" ✗)
+       * "محطة أرامكو" → merchant: "Mahatta Aramco" ✓ (NOT "محطة أرامكو" ✗)
+       * "مكتبة جرير" → merchant: "Maktabat Jarir" ✓ (NOT "مكتبة جرير" ✗)
+       * "الشركة السعودية للكهرباء" → merchant: "Al Sharika Al Saudiya Lil Kahraba" ✓
+       * "شركة الاتصالات السعودية" → merchant: "Sharikat Al Itisalat Al Saudiya (STC)" ✓
+     • **Validation check: Before finalizing, scan every merchant value. If you detect ANY Arabic character, you have failed this requirement. Retry with proper transliteration.**
+     • This applies to ALL name fields: merchant, person names, company names, etc.
 
 5) Categories (must match one of these only)
    - purchase → POS/online buys.  
@@ -589,6 +650,19 @@ EXTRACTION RULES
    - Include full address if available
    - Capture all contact information (phone, email, website)
    - Extract tax ID, business registration, VAT number
+
+   - **MANDATORY ARABIC TRANSLITERATION RULE (CRITICAL):**
+     ⚠️ **ABSOLUTE REQUIREMENT: ALL Arabic script MUST be converted to Latin script (English letters) in merchant_name, cashier_name, server_name fields.**
+     • If you see Arabic characters (ا ب ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن ه و ي), you MUST transliterate to English.
+     • **NEVER output Arabic script in name fields. Only Latin alphabet is allowed.**
+     • Transliteration examples (phonetic conversion, NOT translation):
+       * "مطعم البيك" → merchant_name: "Mataam Al Baik" ✓ (NOT "مطعم البيك" ✗)
+       * "صيدلية النهدي" → merchant_name: "Saydaliyat Al Nahdi" ✓ (NOT "صيدلية النهدي" ✗)
+       * "كافيه نجد" → merchant_name: "Cafe Najd" ✓ (NOT "كافيه نجد" ✗)
+       * "علی" → cashier_name: "Ali" ✓ (NOT "علی" ✗)
+       * "محمد" → server_name: "Muhammad" ✓ (NOT "محمد" ✗)
+     • **Validation check: Before finalizing, scan every name field. If you detect ANY Arabic character, you have failed this requirement. Retry with proper transliteration.**
+     • Always store names in Latin script for consistency and matching.
 
 3) Date & Time
    - Support all date formats globally
@@ -859,6 +933,19 @@ EXTRACTION RULES
    - Extract tax IDs (VAT, GST, TIN, EIN, etc.)
    - Get company registration numbers
    - Include bank details for payment (account, bank name, SWIFT/IBAN)
+
+   - **MANDATORY ARABIC TRANSLITERATION RULE (CRITICAL):**
+     ⚠️ **ABSOLUTE REQUIREMENT: ALL Arabic script MUST be converted to Latin script (English letters) in vendor.name, customer.name, and all name fields.**
+     • If you see Arabic characters (ا ب ت ث ج ح خ د ذ ر ز س ش ص ض ط ظ ع غ ف ق ك ل م ن ه و ي), you MUST transliterate to English.
+     • **NEVER output Arabic script in name fields. Only Latin alphabet is allowed.**
+     • Transliteration examples (phonetic conversion, NOT translation):
+       * "شركة النور" → vendor.name: "Sharikat Al Noor" ✓ (NOT "شركة النور" ✗)
+       * "علی أحمد" → customer.name: "Ali Ahmad" ✓ (NOT "علی أحمد" ✗)
+       * "مؤسسة الخليج" → vendor.name: "Muassasat Al Khaleej" ✓ (NOT "مؤسسة الخليج" ✗)
+       * "صيدلية النهدي" → vendor.name: "Saydaliyat Al Nahdi" ✓ (NOT "صيدلية النهدي" ✗)
+     • **Validation check: Before finalizing, scan every name field. If you detect ANY Arabic character, you have failed this requirement. Retry with proper transliteration.**
+     • Always store names in Latin script for consistency and matching.
+     • This applies to all name fields: vendor.name, customer.name, authorized signatories, etc.
 
 4) Line Items
    - Extract EVERY product/service line

@@ -108,7 +108,6 @@ class FolderService {
         throw error;
       }
 
-      // TODO Phase 4: Include counts for transactions, receipts, invoices
       return folder;
     } catch (error) {
       throw error;
@@ -574,6 +573,15 @@ class FolderService {
         throw error;
       }
 
+      // Verify both folders have same statement type
+      if (sourceFolder.statementType !== targetFolder.statementType) {
+        const error = new Error(
+          `Cannot copy ${sourceFolder.statementType} folder to ${targetFolder.statementType} general folder. Statement types must match.`
+        );
+        error.statusCode = HTTP_STATUS.BAD_REQUEST;
+        throw error;
+      }
+
       // Verify user has access
       const hasAccess = await workspaceRepository.isMember(
         sourceFolder.workspaceId,
@@ -623,10 +631,13 @@ class FolderService {
         throw error;
       }
 
-      // Get child folders
+      // Get child folders (only RECONCILIATION folders can be children)
       const childFolders = await folderRepository.findByWorkspaceId(
         parentFolder.workspaceId,
-        { parentFolderId: parentFolderId },
+        {
+          parentFolderId: parentFolderId,
+          type: FOLDER_TYPES.RECONCILIATION
+        },
         { page: 1, limit: 1000 }
       );
 

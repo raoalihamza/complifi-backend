@@ -1,6 +1,8 @@
 module.exports = {
   // User Roles
   USER_ROLES: {
+    OWNER: "OWNER", // Highest level - can manage super admins
+    SUPER_ADMIN: "SUPER_ADMIN", // Can manage workspaces and users
     ADMIN: "ADMIN",
     AUDIT_PARTNER: "AUDIT_PARTNER",
     SME_USER: "SME_USER",

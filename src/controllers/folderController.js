@@ -48,13 +48,31 @@ class FolderController {
       const { workspaceId } = req.params;
       const userId = req.user.id;
 
+      // Helper function to parse array or comma-separated values
+      const parseArray = (value) => {
+        if (!value) return undefined;
+        if (Array.isArray(value)) return value;
+        if (typeof value === 'string') {
+          return value.includes(',') ? value.split(',').map(v => v.trim()) : [value];
+        }
+        return [value];
+      };
+
+      // Helper function to parse assignee IDs (including "no assignee")
+      const parseAssigneeIds = (value) => {
+        if (!value) return undefined;
+        const values = parseArray(value);
+        return values.map(v => {
+          if (v === 'null' || v === 'none' || v === 'no-assignee') return null;
+          return parseInt(v);
+        });
+      };
+
       // Extract filters from query
       const filters = {
-        status: req.query.status,
-        priority: req.query.priority,
-        assignedToId: req.query.assignedToId
-          ? parseInt(req.query.assignedToId)
-          : undefined,
+        status: parseArray(req.query.status),
+        priority: parseArray(req.query.priority),
+        assignedToId: parseAssigneeIds(req.query.assignedToId),
         type: req.query.type,
         statementType: req.query.statementType,
         search: req.query.search,
@@ -278,12 +296,30 @@ class FolderController {
       const { workspaceId } = req.params;
       const userId = req.user.id;
 
+      // Helper function to parse array or comma-separated values
+      const parseArray = (value) => {
+        if (!value) return undefined;
+        if (Array.isArray(value)) return value;
+        if (typeof value === 'string') {
+          return value.includes(',') ? value.split(',').map(v => v.trim()) : [value];
+        }
+        return [value];
+      };
+
+      // Helper function to parse assignee IDs (including "no assignee")
+      const parseAssigneeIds = (value) => {
+        if (!value) return undefined;
+        const values = parseArray(value);
+        return values.map(v => {
+          if (v === 'null' || v === 'none' || v === 'no-assignee') return null;
+          return parseInt(v);
+        });
+      };
+
       // Extract filters from query
       const filters = {
-        priority: req.query.priority,
-        assignedToId: req.query.assignedToId
-          ? parseInt(req.query.assignedToId)
-          : undefined,
+        priority: parseArray(req.query.priority),
+        assignedToId: parseAssigneeIds(req.query.assignedToId),
         type: req.query.type,
         statementType: req.query.statementType,
       };
