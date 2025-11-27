@@ -51,8 +51,8 @@ const acceptInvitationSchema = Joi.object({
       "string.min": "Password must be at least 8 characters long",
       "any.required": "Password is required",
     }),
-  }).required().messages({
-    "any.required": "User data is required",
+  }).optional().allow(null).messages({
+    "object.base": "User data must be an object or null",
   }),
 });
 

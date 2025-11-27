@@ -421,6 +421,8 @@ class WorkspaceRepository {
       return await member.update({
         userId,
         status: "active",
+        invitationAccepted: true,
+        acceptedAt: new Date(),
         joinedAt: new Date(),
         invitationToken: null,
         invitationTokenExpiry: null,

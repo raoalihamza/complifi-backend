@@ -61,9 +61,9 @@ router.patch(
   folderController.updatePriority
 );
 
-// POST /api/v1/folders/:id/copy
-// Copy reconciliation folder to a general folder
-router.post("/:id/copy", protect, folderController.copyFolderToGeneral);
+// POST /api/v1/folders/:id/move
+// Move reconciliation folder to a general folder
+router.post("/:id/move", protect, folderController.moveFolderToGeneral);
 
 // GET /api/v1/folders/:id/children
 // Get child folders of a general folder

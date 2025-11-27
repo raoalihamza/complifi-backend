@@ -290,6 +290,7 @@ class FolderController {
   /**
    * Get Job Board (Kanban view)
    * GET /api/v1/workspaces/:workspaceId/job-board
+   * Query params: priority, assignedToId, statementType, search
    */
   async getJobBoard(req, res) {
     try {
@@ -320,8 +321,8 @@ class FolderController {
       const filters = {
         priority: parseArray(req.query.priority),
         assignedToId: parseAssigneeIds(req.query.assignedToId),
-        type: req.query.type,
         statementType: req.query.statementType,
+        search: req.query.search, // Text search on folder name
       };
 
       const jobBoard = await folderService.getJobBoard(
@@ -397,10 +398,10 @@ class FolderController {
   }
 
   /**
-   * Copy reconciliation folder to general folder
-   * POST /api/v1/folders/:id/copy
+   * Move reconciliation folder to general folder
+   * POST /api/v1/folders/:id/move
    */
-  async copyFolderToGeneral(req, res) {
+  async moveFolderToGeneral(req, res) {
     try {
       const { id } = req.params;
       const { targetGeneralFolderId } = req.body;
@@ -415,7 +416,7 @@ class FolderController {
         );
       }
 
-      const folder = await folderService.copyFolderToGeneral(
+      const folder = await folderService.moveFolderToGeneral(
         userId,
         parseInt(id),
         parseInt(targetGeneralFolderId)
@@ -423,7 +424,7 @@ class FolderController {
 
       return successResponse(
         res,
-        "Folder copied to general folder successfully",
+        "Folder moved to general folder successfully",
         folder,
         HTTP_STATUS.OK
       );

@@ -57,8 +57,13 @@ class FolderService {
 
   /**
    * Get all folders in workspace with filters
+   * @param {number} userId - The user ID
+   * @param {number} workspaceId - The workspace ID
+   * @param {object} filters - Filters to apply
+   * @param {object} pagination - Pagination options
+   * @param {string} countsType - Type of counts to return: 'folderTypes' (default) or 'statementTypes'
    */
-  async getFolders(userId, workspaceId, filters = {}, pagination = {}) {
+  async getFolders(userId, workspaceId, filters = {}, pagination = {}, countsType = 'folderTypes') {
     try {
       // Verify user has access to workspace
       const hasAccess = await workspaceRepository.isMember(workspaceId, userId);
@@ -73,7 +78,8 @@ class FolderService {
       const result = await folderRepository.findByWorkspaceId(
         workspaceId,
         filters,
-        pagination
+        pagination,
+        countsType
       );
 
       return result;
@@ -530,9 +536,9 @@ class FolderService {
   }
 
   /**
-   * Copy reconciliation folder to a general folder
+   * Move reconciliation folder to a general folder
    */
-  async copyFolderToGeneral(userId, folderId, targetGeneralFolderId) {
+  async moveFolderToGeneral(userId, folderId, targetGeneralFolderId) {
     try {
       // Get source folder
       const sourceFolder = await folderRepository.findById(folderId);
@@ -545,7 +551,7 @@ class FolderService {
 
       // Verify source is a reconciliation folder
       if (sourceFolder.type !== FOLDER_TYPES.RECONCILIATION) {
-        const error = new Error("Can only copy reconciliation folders");
+        const error = new Error("Can only move reconciliation folders");
         error.statusCode = HTTP_STATUS.BAD_REQUEST;
         throw error;
       }
@@ -576,7 +582,7 @@ class FolderService {
       // Verify both folders have same statement type
       if (sourceFolder.statementType !== targetFolder.statementType) {
         const error = new Error(
-          `Cannot copy ${sourceFolder.statementType} folder to ${targetFolder.statementType} general folder. Statement types must match.`
+          `Cannot move ${sourceFolder.statementType} folder to ${targetFolder.statementType} general folder. Statement types must match.`
         );
         error.statusCode = HTTP_STATUS.BAD_REQUEST;
         throw error;
@@ -594,7 +600,7 @@ class FolderService {
         throw error;
       }
 
-      // Update source folder to have parent
+      // Update source folder to have parent (moving it to the target folder)
       await folderRepository.update(folderId, {
         parentFolderId: targetGeneralFolderId,
       });

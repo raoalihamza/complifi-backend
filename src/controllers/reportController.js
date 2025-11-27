@@ -64,7 +64,8 @@ class ReportController {
         userId,
         parseInt(workspaceId),
         filters,
-        pagination
+        pagination,
+        'statementTypes' // Return counts by statement type (BANK/CARD) for reports
       );
 
       return paginatedResponse(

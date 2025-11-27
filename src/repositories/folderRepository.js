@@ -1,4 +1,4 @@
-const { Folder, Workspace, User } = require("../models");
+const { Folder, Workspace, User, sequelize } = require("../models");
 const { Op } = require("sequelize");
 const transactionRepository = require("./transactionRepository");
 
@@ -40,6 +40,11 @@ class FolderRepository {
             as: "creator",
             attributes: ["id", "name", "email"],
           },
+          {
+            model: Folder,
+            as: "parentFolder",
+            attributes: ["id", "name"],
+          },
           // Transaction, Receipt, Invoice will be added in Phase 4
         ];
       }
@@ -59,6 +64,7 @@ class FolderRepository {
           ...folderJson,
           matchedTransactions: counts.matchedTransactions,
           exceptionTransactions: counts.exceptionTransactions,
+          parentFolderName: folderJson.parentFolder?.name || null,
         };
       }
 
@@ -70,8 +76,12 @@ class FolderRepository {
 
   /**
    * Find folders by workspace with filters and pagination
+   * @param {number} workspaceId - The workspace ID
+   * @param {object} filters - Filters to apply
+   * @param {object} pagination - Pagination options
+   * @param {string} countsType - Type of counts to return: 'folderTypes' (default) or 'statementTypes'
    */
-  async findByWorkspaceId(workspaceId, filters = {}, pagination = {}) {
+  async findByWorkspaceId(workspaceId, filters = {}, pagination = {}, countsType = 'folderTypes') {
     try {
       const {
         page = 1,
@@ -140,9 +150,24 @@ class FolderRepository {
       }
 
       if (filters.search) {
-        where.name = {
-          [Op.iLike]: `%${filters.search}%`,
-        };
+        // Search across multiple fields: name, type, status, priority
+        // For ENUM fields, we need to cast them to text for ILIKE to work
+        const searchTerm = filters.search.toUpperCase();
+        where[Op.or] = [
+          { name: { [Op.iLike]: `%${filters.search}%` } },
+          sequelize.where(
+            sequelize.cast(sequelize.col('Folder.type'), 'TEXT'),
+            { [Op.iLike]: `%${searchTerm}%` }
+          ),
+          sequelize.where(
+            sequelize.cast(sequelize.col('Folder.status'), 'TEXT'),
+            { [Op.iLike]: `%${searchTerm}%` }
+          ),
+          sequelize.where(
+            sequelize.cast(sequelize.col('Folder.priority'), 'TEXT'),
+            { [Op.iLike]: `%${searchTerm}%` }
+          ),
+        ];
       }
 
       if (filters.dateRange) {
@@ -166,8 +191,13 @@ class FolderRepository {
       }
 
       // Filter by parent folder ID
+      // If parentFolderId filter is explicitly provided, use it
+      // Otherwise, default to showing only top-level folders (parentFolderId IS NULL)
       if (filters.parentFolderId !== undefined) {
         where.parentFolderId = filters.parentFolderId;
+      } else {
+        // By default, exclude folders that have been moved to general folders
+        where.parentFolderId = { [Op.is]: null };
       }
 
       const { count, rows } = await Folder.findAndCountAll({
@@ -207,31 +237,64 @@ class FolderRepository {
         };
       });
 
-      // Get total counts by folder type for the workspace
-      const totalReconciliationFolders = await Folder.count({
-        where: {
-          workspaceId,
-          type: 'RECONCILIATION'
-        },
-      });
+      // Build pagination object based on counts type
+      const paginationResult = {
+        totalItems: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: page,
+        itemsPerPage: limit,
+      };
 
-      const totalGeneralFolders = await Folder.count({
-        where: {
-          workspaceId,
-          type: 'GENERAL'
-        },
-      });
+      // Add different counts based on the countsType parameter
+      if (countsType === 'statementTypes') {
+        // For reports: count by statement type (BANK/CARD) for reconciliation folders only
+        // Only count top-level folders (not moved to general folders)
+        const totalBankStatementReports = await Folder.count({
+          where: {
+            workspaceId,
+            type: 'RECONCILIATION',
+            statementType: 'BANK',
+            parentFolderId: { [Op.is]: null }
+          },
+        });
+
+        const totalCardStatementReports = await Folder.count({
+          where: {
+            workspaceId,
+            type: 'RECONCILIATION',
+            statementType: 'CARD',
+            parentFolderId: { [Op.is]: null }
+          },
+        });
+
+        paginationResult.totalBankStatementReports = totalBankStatementReports;
+        paginationResult.totalCardStatementReports = totalCardStatementReports;
+      } else {
+        // Default: count by folder type (RECONCILIATION/GENERAL)
+        // Only count top-level folders (not moved to general folders)
+        const totalReconciliationFolders = await Folder.count({
+          where: {
+            workspaceId,
+            type: 'RECONCILIATION',
+            parentFolderId: { [Op.is]: null }
+          },
+        });
+
+        const totalGeneralFolders = await Folder.count({
+          where: {
+            workspaceId,
+            type: 'GENERAL',
+            parentFolderId: { [Op.is]: null }
+          },
+        });
+
+        paginationResult.totalReconciliationFolders = totalReconciliationFolders;
+        paginationResult.totalGeneralFolders = totalGeneralFolders;
+      }
 
       return {
         folders: foldersWithCounts,
-        pagination: {
-          totalItems: count,
-          totalPages: Math.ceil(count / limit),
-          currentPage: page,
-          itemsPerPage: limit,
-          totalReconciliationFolders,
-          totalGeneralFolders,
-        },
+        pagination: paginationResult,
       };
     } catch (error) {
       throw error;
